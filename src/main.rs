@@ -1,8 +1,12 @@
 extern crate libc;
+use std::collections::BTreeMap;
 use std::ptr;
 
-#[repr(C)] pub struct Env { _private: [u8; 0] }
-extern {
+#[repr(C)]
+pub struct Env {
+    _private: [u8; 0],
+}
+extern "C" {
     pub fn alloc_env(atomic_ints: libc::size_t, ints: libc::size_t) -> *mut Env;
     pub fn free_env(e: *mut Env);
     pub fn get_atomic_int(e: *const Env, index: libc::size_t) -> libc::c_int;
@@ -11,17 +15,21 @@ extern {
     pub fn test(tid: libc::c_int, e: *mut Env);
 }
 
-struct Environment {
-    num_atomic_ints: usize,
-    num_ints: usize,
-    env: *mut Env
+struct Environment<'a> {
+    atomic_ints: &'a [&'a str],
+    ints: &'a [&'a str],
+    env: *mut Env,
 }
 
-impl Environment {
-    pub fn new(atomic_ints: usize, ints: usize) -> Option<Self> {
-        let mut e = Environment { num_atomic_ints: atomic_ints, num_ints: ints, env: ptr::null_mut() };
+impl<'a> Environment<'a> {
+    pub fn new(atomic_ints: &'a [&'a str], ints: &'a [&'a str]) -> Option<Self> {
+        let mut e = Environment {
+            atomic_ints,
+            ints,
+            env: ptr::null_mut(),
+        };
         unsafe {
-            e.env = alloc_env(e.num_atomic_ints, e.num_ints);
+            e.env = alloc_env(e.atomic_ints.len(), e.ints.len());
         }
         if e.env.is_null() {
             None
@@ -30,28 +38,24 @@ impl Environment {
         }
     }
 
-    pub fn atomic_int(&self, index: usize) -> Option<i32> {
-        if self.num_atomic_ints < index {
-            None
-        } else {
-            unsafe {
-                Some (get_atomic_int(self.env, index))
-            }
-        }
+    pub fn atomic_int_values(&self) -> BTreeMap<&'a str, i32> {
+        self.atomic_ints
+            .iter()
+            .enumerate()
+            .map(|(i, x)| unsafe { (*x, get_atomic_int(self.env, i)) })
+            .collect()
     }
 
-    pub fn int(&self, index: usize) -> Option<i32> {
-        if self.num_ints < index {
-            None
-        } else {
-            unsafe {
-                Some (get_int(self.env, index))
-            }
-        }
+    pub fn int_values(&self) -> BTreeMap<&'a str, i32> {
+        self.ints
+            .iter()
+            .enumerate()
+            .map(|(i, x)| unsafe { (*x, get_atomic_int(self.env, i)) })
+            .collect()
     }
 }
 
-impl Drop for Environment {
+impl Drop for Environment<'_> {
     fn drop(&mut self) {
         unsafe {
             free_env(self.env);
@@ -67,18 +71,24 @@ fn run_thread(tid: i32, e: &mut Environment) {
 }
 
 fn main() {
-    let mut e = Environment::new(2, 2).unwrap();
+    let atomic_ints = vec!["x", "y"];
+    let ints = vec!["0:r0", "1:r0"];
+
+    let mut e = Environment::new(&atomic_ints, &ints).unwrap();
 
     run_thread(0, &mut e);
-    println!("x={0}", e.atomic_int(0).unwrap());
-    println!("y={0}", e.atomic_int(1).unwrap());
-    println!("0:r0={0}", e.int(0).unwrap());
-    println!("1:r0={0}", e.int(1).unwrap());
+    for (k, v) in e.atomic_int_values().iter() {
+        println!("{0}={1}", k, v)
+    }
+    for (k, v) in e.int_values().iter() {
+        println!("{0}={1}", k, v)
+    }
 
     run_thread(1, &mut e);
-    println!("x={0}", e.atomic_int(0).unwrap());
-    println!("x={0}", e.atomic_int(0).unwrap());
-    println!("y={0}", e.atomic_int(1).unwrap());
-    println!("0:r0={0}", e.int(0).unwrap());
-    println!("1:r0={0}", e.int(1).unwrap());
+    for (k, v) in e.atomic_int_values().iter() {
+        println!("{0}={1}", k, v)
+    }
+    for (k, v) in e.int_values().iter() {
+        println!("{0}={1}", k, v)
+    }
 }
