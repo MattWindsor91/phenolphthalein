@@ -2,6 +2,7 @@ extern crate libc;
 use std::collections::BTreeMap;
 use std::ptr;
 use std::thread;
+use std::sync::{Arc, Barrier};
 
 #[repr(C)]
 pub struct UnsafeEnv {
@@ -14,7 +15,7 @@ extern "C" {
     pub fn get_atomic_int(e: *const UnsafeEnv, index: libc::size_t) -> libc::c_int;
     pub fn get_int(e: *const UnsafeEnv, index: libc::size_t) -> libc::c_int;
 
-    pub fn test(tid: libc::c_int, e: *mut UnsafeEnv);
+    pub fn test(tid: libc::size_t, e: *mut UnsafeEnv);
 }
 
 /// A thin wrapper over the C thread environment type.
@@ -120,9 +121,16 @@ impl<'a> Environment<'a> {
     }
 }
 
-fn run_thread(tid: i32, e: &mut Env) {
+fn run_thread(tid: usize, e: &mut Env) {
     unsafe {
         test(tid, e.p);
+    }
+}
+
+fn thread_body(tid: usize, mut e: Env, b: Arc<Barrier>) {
+    for _i in 0..=100 {
+        run_thread(tid, &mut e);
+        b.wait();
     }
 }
 
@@ -132,18 +140,29 @@ fn main() {
     let e = Environment::new(&atomic_ints, &ints).unwrap();
 
     let nthreads = 2;
-    let mut handles: Vec<thread::JoinHandle<()>> = vec![];
+    let mut handles: Vec<thread::JoinHandle<()>> = Vec::with_capacity(nthreads);
+    let barrier = Arc::new(Barrier::new(nthreads + 1));
+
     for i in 0..nthreads {
         let builder = thread::Builder::new().name(format!("P{0}", i));
-        let mut env = e.env.clone();
-        let t = builder.spawn(move || run_thread(i, &mut env)).unwrap();
+        let env = e.env.clone();
+        let bar = barrier.clone();
+        let t = builder.spawn(move || thread_body(i, env, bar)).unwrap();
         handles.push(t)
     }
 
-    for (k, v) in e.atomic_int_values().iter() {
-        println!("{0}={1}", k, v)
+    for _i in 0..=100 {
+        barrier.wait();
+        for (k, v) in e.atomic_int_values().iter() {
+            println!("{0}={1}", k, v)
+        }
+        for (k, v) in e.int_values().iter() {
+            println!("{0}={1}", k, v)
+        }
     }
-    for (k, v) in e.int_values().iter() {
-        println!("{0}={1}", k, v)
+
+    for h in handles.into_iter() {
+        h.join();
     }
+
 }

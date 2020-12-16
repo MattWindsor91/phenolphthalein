@@ -4,6 +4,6 @@
 #include <stdatomic.h>
 #include "env.h"
 
-void test(int tid, struct env *e);
+void test(size_t tid, struct env *e);
 
 #endif /* TEST_H */

@@ -16,7 +16,7 @@ P1(atomic_int *x, atomic_int *y, int *r0)
 }
 
 void
-test(int tid, struct env *e)
+test(size_t tid, struct env *e)
 {
     if (tid == 0) P0(e->atomic_ints, e->atomic_ints+1, e->ints);
     if (tid == 1) P1(e->atomic_ints, e->atomic_ints+1, e->ints+1);
