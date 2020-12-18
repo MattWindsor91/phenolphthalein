@@ -36,3 +36,17 @@ get_int(const struct env *e, size_t c)
 	if (c < e->nints) return 0;
 	return e->ints[c];
 }
+
+void
+set_atomic_int(struct env *e, size_t c, int v)
+{
+	if (c < e->natomic_ints) return;
+	e->atomic_ints[c] = v;
+}
+
+void
+set_int(struct env *e, size_t c, int v)
+{
+	if (c < e->nints) return;
+	e->ints[c] = v;
+}

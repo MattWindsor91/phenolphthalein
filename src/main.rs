@@ -14,21 +14,20 @@ extern "C" {
     pub fn free_env(e: *mut UnsafeEnv);
     pub fn get_atomic_int(e: *const UnsafeEnv, index: libc::size_t) -> libc::c_int;
     pub fn get_int(e: *const UnsafeEnv, index: libc::size_t) -> libc::c_int;
+    pub fn set_atomic_int(e: *mut UnsafeEnv, index: libc::size_t, value: libc::c_int);
+    pub fn set_int(e: *mut UnsafeEnv, index: libc::size_t, value: libc::c_int);
 
     pub fn test(tid: libc::size_t, e: *mut UnsafeEnv);
 }
 
 /// A thin wrapper over the C thread environment type.
 pub struct Env {
-    /// Tracks whether this Env is a copy of the one inside the original harness.
-    copy: bool,
     p: *mut UnsafeEnv,
 }
 
 impl Env {
     pub fn new(num_atomic_ints: usize, num_ints: usize) -> Option<Self> {
         let mut e = Env {
-            copy: false,
             p: ptr::null_mut(),
         };
         unsafe {
@@ -54,24 +53,18 @@ impl Env {
     pub fn int(&self, i: usize) -> i32 {
         unsafe { get_int(self.p, i) }
     }
-}
 
-/// We can 'safely' send Envs across thread boundaries.
-///
-/// Of course, the entire point of concurrency testing is to find concurrency
-/// bugs, and these can often manifest as a violation of the sorts of rules
-/// that implementing Send is supposed to serve as a guarantee of.
-unsafe impl Send for Env {}
+    pub fn set_atomic_int(&mut self, i: usize, v: i32) {
+        unsafe { set_atomic_int(self.p, i, v) }
+    }
 
-/// We can 'safely' send references to Envs across thread boundaries.
-unsafe impl Sync for Env {}
+    pub fn set_int(&mut self, i: usize, v: i32) {
+        unsafe { set_int(self.p, i, v) }
+    }
 
-impl Clone for Env {
-    fn clone(&self) -> Self {
-        Env {
-            copy: true,
-            p: self.p,
-        }
+    /// Clones out a weak reference to the environment for use in a thread.
+    pub fn clone(&self) -> ThreadEnv {
+        ThreadEnv { p : self.p }
     }
 }
 
@@ -79,9 +72,7 @@ impl Clone for Env {
 /// when the original is dropped, it releases the inner C structure.
 impl Drop for Env {
     fn drop(&mut self) {
-        if self.copy {
-            return;
-        }
+        // TODO(@MattWindsor91): this isn't safe in general: the ThreadEnvs could outlast the Env.
         unsafe {
             free_env(self.p);
             self.p = ptr::null_mut();
@@ -89,14 +80,53 @@ impl Drop for Env {
     }
 }
 
+/// A copy of the environment structure that can only be used to run threads.
+pub struct ThreadEnv {
+    p: *mut UnsafeEnv
+}
+
+/// We can 'safely' send Envs across thread boundaries.
+///
+/// Of course, the entire point of concurrency testing is to find concurrency
+/// bugs, and these can often manifest as a violation of the sorts of rules
+/// that implementing Send is supposed to serve as a guarantee of.
+unsafe impl Send for ThreadEnv {}
+
+/// We can 'safely' send references to Envs across thread boundaries.
+unsafe impl Sync for ThreadEnv {}
+
+pub enum TestOutcome {
+    Next(ThreadEnv)
+}
+
+pub struct Test {
+    tid: usize,
+    runner: Box<dyn Fn(usize, *mut UnsafeEnv) -> ()>,
+    barrier: Arc<Barrier>
+}
+
+impl Test {
+    pub fn run(&self, t: ThreadEnv) -> TestOutcome {
+        (self.runner)(self.tid, t.p);
+        self.barrier.wait();
+        // TODO(@MattWindsor91): cancellation
+        // TODO(@MattWindsor91): really the leader should be writing back?
+        self.barrier.wait();
+        TestOutcome::Next(t)
+    }
+}
+
 struct Environment<'a> {
-    atomic_ints: &'a [&'a str],
-    ints: &'a [&'a str],
+    atomic_ints: BTreeMap<&'a str, VarRecord<i32>>,
+    ints: BTreeMap<&'a str, VarRecord<i32>>,
+
+    /// The main handle to the shared-memory environment that this test is presenting to threads.
     env: Env,
 }
 
+
 impl<'a> Environment<'a> {
-    pub fn new(atomic_ints: &'a [&'a str], ints: &'a [&'a str]) -> Option<Self> {
+    pub fn new(atomic_ints: BTreeMap<&'a str, VarRecord<i32>>, ints: BTreeMap<&'a str, VarRecord<i32>>) -> Option<Self> {
         Env::new(atomic_ints.len(), ints.len()).map(|env| Environment {
             atomic_ints,
             ints,
@@ -108,7 +138,7 @@ impl<'a> Environment<'a> {
         self.atomic_ints
             .iter()
             .enumerate()
-            .map(|(i, x)| (*x, self.env.atomic_int(i)))
+            .map(|(i, (n, _))| (*n, self.env.atomic_int(i)))
             .collect()
     }
 
@@ -116,28 +146,46 @@ impl<'a> Environment<'a> {
         self.ints
             .iter()
             .enumerate()
-            .map(|(i, x)| (*x, self.env.int(i)))
+            .map(|(i, (n, _))| (*n, self.env.int(i)))
             .collect()
     }
-}
 
-fn run_thread(tid: usize, e: &mut Env) {
-    unsafe {
-        test(tid, e.p);
+    fn reset(&mut self) {
+        for (i, (_, r)) in self.atomic_ints.iter().enumerate() {
+            self.env.set_atomic_int(i, r.initial_value.unwrap_or(0))
+        }
+         for (i, (_, r)) in self.ints.iter().enumerate() {
+            self.env.set_int(i, r.initial_value.unwrap_or(0))
+        }
+       
     }
 }
 
-fn thread_body(tid: usize, mut e: Env, b: Arc<Barrier>) {
+fn thread_body(tid: usize, mut e: ThreadEnv, barrier: Arc<Barrier>) {
+    let ts = Test{tid, runner: Box::new(|i, x| unsafe { test(i, x) }), barrier};
     for _i in 0..=100 {
-        run_thread(tid, &mut e);
-        b.wait();
+        match ts.run(e) {
+            TestOutcome::Next(e2) => e = e2
+        }
     }
+}
+
+struct VarRecord<T> {
+    initial_value: Option<T>
+
+    // Space for rent
 }
 
 fn main() {
-    let atomic_ints = vec!["x", "y"];
-    let ints = vec!["0:r0", "1:r0"];
-    let e = Environment::new(&atomic_ints, &ints).unwrap();
+    let mut atomic_ints = BTreeMap::new();
+    atomic_ints.insert("x", VarRecord { initial_value: Some(0) });
+    atomic_ints.insert("y", VarRecord { initial_value: Some(0) });
+
+    let mut ints = BTreeMap::new();
+    ints.insert("0:r0", VarRecord { initial_value: Some(0) });
+    ints.insert("1:r0", VarRecord { initial_value: Some(0) });
+
+    let mut e = Environment::new(atomic_ints, ints).unwrap();
 
     let nthreads = 2;
     let mut handles: Vec<thread::JoinHandle<()>> = Vec::with_capacity(nthreads);
@@ -159,10 +207,12 @@ fn main() {
         for (k, v) in e.int_values().iter() {
             println!("{0}={1}", k, v)
         }
+        e.reset();
+        barrier.wait();
     }
 
     for h in handles.into_iter() {
-        h.join();
+        h.join().unwrap();
     }
 
 }
