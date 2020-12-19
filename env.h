@@ -2,6 +2,9 @@
 #define ENV_H
 
 struct env {
+    // The reference count of the environment; env is dead when this hits 0.
+    atomic_size_t rc;
+
     size_t natomic_ints;
     size_t nints;
     
@@ -9,8 +12,25 @@ struct env {
     int *ints;
 };
 
+// Constructs a new environment with the given number of variable slots.
 struct env *alloc_env(size_t atomic_ints, size_t ints);
-void free_env (struct env *e);
+
+// Copies an environment, returning a pointer to the new environment.
+// This pointer may or may not be the same as e.
+struct env *copy_env(struct env *e);
+
+// Frees the environment e.
+// Depending on the implementation of copy_env, this may or may not actually
+// de-allocate e's contents on copies; regardless, one should not use e
+// after freeing.
+void free_env(struct env *e);
+
+/*
+ * Reading to and writing from an env outside a test
+ *
+ * These functions exist mainly for the benefit of test runners written in
+ * languages where atomics aren't ABI comparible with those in C.
+ */
 
 // Gets the atomic int at index c from env e.
 // Not guaranteed to be thread-safe.
