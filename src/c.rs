@@ -4,18 +4,18 @@ use crate::env;
 use std::ptr;
 
 #[repr(C)]
-pub struct UnsafeEnv {
+struct UnsafeEnv {
     _private: [u8; 0],
 }
 
 extern "C" {
-    pub fn alloc_env(atomic_ints: libc::size_t, ints: libc::size_t) -> *mut UnsafeEnv;
-    pub fn copy_env(e: *mut UnsafeEnv) -> *mut UnsafeEnv;
-    pub fn free_env(e: *mut UnsafeEnv);
-    pub fn get_atomic_int(e: *const UnsafeEnv, index: libc::size_t) -> libc::c_int;
-    pub fn get_int(e: *const UnsafeEnv, index: libc::size_t) -> libc::c_int;
-    pub fn set_atomic_int(e: *mut UnsafeEnv, index: libc::size_t, value: libc::c_int);
-    pub fn set_int(e: *mut UnsafeEnv, index: libc::size_t, value: libc::c_int);
+    fn alloc_env(atomic_ints: libc::size_t, ints: libc::size_t) -> *mut UnsafeEnv;
+    fn copy_env(e: *mut UnsafeEnv) -> *mut UnsafeEnv;
+    fn free_env(e: *mut UnsafeEnv);
+    fn get_atomic_int(e: *const UnsafeEnv, index: libc::size_t) -> libc::c_int;
+    fn get_int(e: *const UnsafeEnv, index: libc::size_t) -> libc::c_int;
+    fn set_atomic_int(e: *mut UnsafeEnv, index: libc::size_t, value: libc::c_int);
+    fn set_int(e: *mut UnsafeEnv, index: libc::size_t, value: libc::c_int);
 }
 
 #[derive(SymBorApi, Clone)]
