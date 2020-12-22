@@ -1,5 +1,4 @@
 use std::ptr;
-use std::sync::{Arc, Barrier};
 
 #[repr(C)]
 pub struct UnsafeEnv {
@@ -25,7 +24,7 @@ pub enum Error {
     EnvAllocFailed,
     NotEnoughThreads,
 }
-type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// Thin layer over the C environment struct, also wrapping in the test stub.
 pub struct Env {
@@ -35,34 +34,53 @@ pub struct Env {
     p: *mut UnsafeEnv,
 }
 
+/// Trait of handles to an observable test environment.
+/// 
+/// This trait currently mainly exists to hide parts of the actual environment
+/// that aren't thread-safe to run, but may be more useful later on.
+pub trait AnEnv {
+    /// Gets the atomic integer in slot i.
+    /// Assumes that the implementation does range checking and returns a
+    /// valid but undefined result if i is out of bounds.
+    fn atomic_int(&self, i: usize) -> i32;
+
+    /// Gets the integer in slot i.
+    /// Assumes that the implementation does range checking and returns a
+    /// valid but undefined result if i is out of bounds.
+    fn int(&self, i: usize) -> i32;
+
+    fn set_atomic_int(&mut self, i: usize, v: i32);
+
+    fn set_int(&mut self, i: usize, v: i32);
+}
+
 impl Env {
     /// Runs the entry point.
-    ///
-    /// This isn't exposed publicly, because the only thing that should be
-    /// calling it is a RunnableTest.
-    fn run(&mut self, tid: usize) {
+    pub fn run(&mut self, tid: usize) {
         unsafe { (self.entry)(tid, self.p) }
     }
+}
 
+impl AnEnv for Env {
     /// Gets the atomic integer in slot i.
     /// Assumes that the C implementation does range checking and returns a
     /// valid but undefined result if i is out of bounds.
-    pub fn atomic_int(&self, i: usize) -> i32 {
+    fn atomic_int(&self, i: usize) -> i32 {
         unsafe { get_atomic_int(self.p, i) }
     }
 
     /// Gets the integer in slot i.
     /// Assumes that the C implementation does range checking and returns a
     /// valid but undefined result if i is out of bounds.
-    pub fn int(&self, i: usize) -> i32 {
+    fn int(&self, i: usize) -> i32 {
         unsafe { get_int(self.p, i) }
     }
 
-    pub fn set_atomic_int(&mut self, i: usize, v: i32) {
+    fn set_atomic_int(&mut self, i: usize, v: i32) {
         unsafe { set_atomic_int(self.p, i, v) }
     }
 
-    pub fn set_int(&mut self, i: usize, v: i32) {
+    fn set_int(&mut self, i: usize, v: i32) {
         unsafe { set_int(self.p, i, v) }
     }
 }
@@ -107,116 +125,5 @@ impl Env {
         } else {
             Ok(e)
         }
-    }
-}
-
-pub struct TestBuilder {
-    num_threads: usize,
-    num_atomic_ints: usize,
-    num_ints: usize,
-}
-
-impl TestBuilder {
-    pub fn new(num_threads: usize, num_atomic_ints: usize, num_ints: usize) -> Self {
-        TestBuilder {
-            num_threads,
-            num_atomic_ints,
-            num_ints,
-        }
-    }
-
-    pub fn build(&self) -> Result<Vec<ReadyTest>> {
-        if self.num_threads == 0 {
-            return Err(Error::NotEnoughThreads);
-        }
-
-        let e = Env::new(self.num_atomic_ints, self.num_ints)?;
-        let b = Arc::new(Barrier::new(self.num_threads));
-
-        let mut v = Vec::with_capacity(self.num_threads);
-        for tid in 0..self.num_threads - 1 {
-            v.push(ReadyTest(Test {
-                tid,
-                e: e.clone(),
-                b: b.clone(),
-            }));
-        }
-        v.push(ReadyTest(Test {
-            tid: self.num_threads - 1,
-            e,
-            b,
-        }));
-        Ok(v)
-    }
-}
-
-/// Hidden implementation of all the various test structs.
-struct Test {
-    tid: usize,
-    e: Env,
-    b: Arc<Barrier>,
-}
-
-// A test that is ready to send to its thread.
-pub struct ReadyTest(Test);
-
-/// We can 'safely' send ReadyTests across thread boundaries.
-///
-/// Of course, the entire point of concurrency testing is to find concurrency
-/// bugs, and these can often manifest as a violation of the sorts of rules
-/// that implementing Send is supposed to serve as a guarantee of.
-unsafe impl Send for ReadyTest {}
-
-/// We can 'safely' send references to Envs across thread boundaries.
-unsafe impl Sync for ReadyTest {}
-
-impl ReadyTest {
-    pub fn start(self) -> RunnableTest {
-        RunnableTest(self.0)
-    }
-}
-
-/// A test that is in the runnable position.
-///
-/// Runnable tests are copiable between threads.
-pub struct RunnableTest(Test);
-
-impl RunnableTest {
-    pub fn run(mut self) -> RunOutcome {
-        self.0.e.run(self.0.tid);
-        let bwr = self.0.b.wait();
-        if bwr.is_leader() {
-            RunOutcome::Observe(ObservableTest(self.0))
-        } else {
-            RunOutcome::Wait(WaitingTest(self.0))
-        }
-    }
-}
-
-pub struct WaitingTest(Test);
-
-impl WaitingTest {
-    pub fn wait(self) -> RunnableTest {
-        self.0.b.wait();
-        RunnableTest(self.0)
-    }
-}
-
-pub struct ObservableTest(Test);
-
-pub enum RunOutcome {
-    /// This thread should wait until it can run again.
-    Wait(WaitingTest),
-    /// This thread should read the current state, then wait until it can run again.
-    Observe(ObservableTest),
-}
-
-impl ObservableTest {
-    pub fn env(&mut self) -> &mut Env {
-        &mut self.0.e
-    }
-
-    pub fn relinquish(self) -> WaitingTest {
-        WaitingTest(self.0)
     }
 }

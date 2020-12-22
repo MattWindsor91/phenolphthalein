@@ -1,5 +1,6 @@
 extern crate libc;
 mod env;
+mod test;
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
@@ -26,13 +27,13 @@ impl<'a> Observer<'a> {
         }
     }
 
-    /// Observes a test environment into this runner's
-    pub fn observe_and_reset(&mut self, env: &mut env::Env) {
+    /// Observes a test environment into this runner's observations.
+    pub fn observe_and_reset(&mut self, env: &mut dyn env::AnEnv) {
         self.observe(env);
         self.reset(env)
     }
 
-    fn observe(&mut self, env: &env::Env) {
+    fn observe(&mut self, env: & dyn env::AnEnv) {
         let state = self.current_state(env);
         let inc = self.obs.get(&state).map_or(0, |k| k + 1);
         self.obs.insert(state, inc);
@@ -40,7 +41,7 @@ impl<'a> Observer<'a> {
 
     /// Gets the current state of the environment.
     /// Note that this is not thread-safe until all test threads are synchronised.
-    fn current_state(&self, env: &env::Env) -> State<'a> {
+    fn current_state(&self, env: & dyn env::AnEnv) -> State<'a> {
         // TODO(@MattWindsor91): work out a good state-machine-ish approach for
         // ensuring this can only be called when threads are quiescent.
         let mut s = State::new();
@@ -50,7 +51,7 @@ impl<'a> Observer<'a> {
         s
     }
 
-    fn atomic_int_values(&self, env: &env::Env) -> BTreeMap<&'a str, i32> {
+    fn atomic_int_values(&self, env: & dyn env::AnEnv) -> BTreeMap<&'a str, i32> {
         self.atomic_ints
             .iter()
             .enumerate()
@@ -58,7 +59,7 @@ impl<'a> Observer<'a> {
             .collect()
     }
 
-    fn int_values(&self, env: &env::Env) -> BTreeMap<&'a str, i32> {
+    fn int_values(&self, env: & dyn env::AnEnv) -> BTreeMap<&'a str, i32> {
         self.ints
             .iter()
             .enumerate()
@@ -67,7 +68,7 @@ impl<'a> Observer<'a> {
     }
 
     /// Resets every variable in the environment to its initial value.
-    fn reset(&mut self, env: &mut env::Env) {
+    fn reset(&mut self, env: &mut dyn env::AnEnv) {
         for (i, (_, r)) in self.atomic_ints.iter().enumerate() {
             env.set_atomic_int(i, r.initial_value.unwrap_or(0))
         }
@@ -82,12 +83,12 @@ struct Thread<'a> {
 }
 
 impl<'a> Thread<'a> {
-    fn run(&self, t: env::RunnableTest) {
+    fn run(&self, t: test::RunnableTest) {
         let mut t = t;
         for _i in 0..=100 {
             match t.run() {
-                env::RunOutcome::Wait(w) => t = w.wait(),
-                env::RunOutcome::Observe(mut o) => {
+                test::RunOutcome::Wait(w) => t = w.wait(),
+                test::RunOutcome::Observe(mut o) => {
                     self.observe_and_reset(o.env());
                     t = o.relinquish().wait()
                 }
@@ -95,7 +96,7 @@ impl<'a> Thread<'a> {
         }
     }
 
-    fn observe_and_reset(&self, e: &mut env::Env) {
+    fn observe_and_reset(&self, e: &mut dyn env::AnEnv) {
         // TODO(@MattWindsor91): handle poisoning here
         let mut g = self.observer.lock().unwrap();
         g.observe_and_reset(e);
@@ -140,7 +141,7 @@ fn main() {
     let nthreads = 2;
     let mut handles: Vec<thread::JoinHandle<()>> = Vec::with_capacity(nthreads);
 
-    let b = env::TestBuilder::new(nthreads, observer.atomic_ints.len(), observer.ints.len());
+    let b = test::TestBuilder::new(nthreads, observer.atomic_ints.len(), observer.ints.len());
     let mob = Arc::new(Mutex::new(observer));
 
     let tests = b.build().unwrap();
