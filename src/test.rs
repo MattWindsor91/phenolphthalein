@@ -3,15 +3,15 @@ use std::sync::{Arc, Barrier};
 
 /// Hidden implementation of all the various test structs.
 #[derive(Clone)]
-struct Test {
+struct Test<'a> {
     tid: usize,
     e: env::Env,
-    entry: env::TestEntry<env::Env>,
+    entry: env::CTestApi<'a>,
     b: Arc<Barrier>,
 }
 
 /// A test that is ready to send to its thread.
-pub struct ReadyTest(Test);
+pub struct ReadyTest<'a>(Test<'a>);
 
 /// We can 'safely' send ReadyTests across thread boundaries.
 ///
@@ -22,25 +22,25 @@ pub struct ReadyTest(Test);
 /// The main rationale for this being 'mostly ok' to send across thread
 /// boundaries is that the test wrappers constrain the operations we can perform
 /// in respect to the thread barriers.
-unsafe impl Send for ReadyTest {}
+unsafe impl Send for ReadyTest<'_> {}
 
 /// We can 'safely' send references to Envs across thread boundaries.
 ///
 /// See the Sync implementation for the handwave.
-unsafe impl Sync for ReadyTest {}
+unsafe impl Sync for ReadyTest<'_> {}
 
-impl ReadyTest {
-    pub fn start(self) -> RunnableTest {
+impl<'a> ReadyTest<'a> {
+    pub fn start(self) -> RunnableTest<'a> {
         RunnableTest(self.0)
     }
 }
 
 /// A test that is in the runnable position.
-pub struct RunnableTest(Test);
+pub struct RunnableTest<'a>(Test<'a>);
 
-impl RunnableTest {
-    pub fn run(mut self) -> RunOutcome {
-        (self.0.entry)(self.0.tid, &mut self.0.e);
+impl<'a> RunnableTest<'a> {
+    pub fn run(mut self) -> RunOutcome<'a> {
+        self.0.entry.run(self.0.tid, &mut self.0.e);
         let bwr = self.0.b.wait();
         if bwr.is_leader() {
             RunOutcome::Observe(ObservableTest(self.0))
@@ -51,59 +51,59 @@ impl RunnableTest {
 }
 
 /// A test that is in the waiting position.
-pub struct WaitingTest(Test);
+pub struct WaitingTest<'a>(Test<'a>);
 
-impl WaitingTest {
-    pub fn wait(self) -> RunnableTest {
+impl<'a> WaitingTest<'a> {
+    pub fn wait(self) -> RunnableTest<'a> {
         self.0.b.wait();
         RunnableTest(self.0)
     }
 }
 
 /// A test that is in the observable position.
-pub struct ObservableTest(Test);
+pub struct ObservableTest<'a>(Test<'a>);
 
-pub enum RunOutcome {
+pub enum RunOutcome<'a> {
     /// This thread should wait until it can run again.
-    Wait(WaitingTest),
+    Wait(WaitingTest<'a>),
     /// This thread should read the current state, then wait until it can run again.
-    Observe(ObservableTest),
+    Observe(ObservableTest<'a>),
 }
 
-impl ObservableTest {
+impl<'a> ObservableTest<'a> {
     pub fn env(&mut self) -> &mut dyn env::AnEnv {
         &mut self.0.e
     }
 
-    pub fn relinquish(self) -> WaitingTest {
+    pub fn relinquish(self) -> WaitingTest<'a> {
         WaitingTest(self.0)
     }
 }
 
-pub struct TestBuilder {
+pub struct TestBuilder<'a> {
     num_threads: usize,
     num_atomic_ints: usize,
     num_ints: usize,
-    entry: Box<dyn Fn() -> env::Result<env::TestEntry<env::Env>>>,
+    entry: env::CTestApi<'a>
 }
 
-impl TestBuilder {
-    pub fn new(num_threads: usize, num_atomic_ints: usize, num_ints: usize) -> Self {
+impl<'a> TestBuilder<'a> {
+    pub fn new(entry: env::CTestApi<'a>, num_threads: usize, num_atomic_ints: usize, num_ints: usize) -> Self {
         TestBuilder {
             num_threads,
             num_atomic_ints,
             num_ints,
-            entry: Box::new(env::load_test),
+            entry
         }
     }
 
-    pub fn build(&self) -> env::Result<Vec<ReadyTest>> {
+    pub fn build(self) -> env::Result<Vec<ReadyTest<'a>>> {
         if self.num_threads == 0 {
             return Err(env::Error::NotEnoughThreads);
         }
 
         let e = env::Env::new(self.num_atomic_ints, self.num_ints)?;
-        let entry = (self.entry)()?;
+        let entry = self.entry;
         let b = Arc::new(Barrier::new(self.num_threads));
         let test = Test {
             tid: self.num_threads - 1,

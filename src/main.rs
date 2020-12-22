@@ -1,10 +1,15 @@
+extern crate crossbeam;
+extern crate dlopen;
+#[macro_use]
+extern crate dlopen_derive;
 extern crate libc;
+
 mod env;
 mod test;
 
+use crossbeam::thread;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 type State<'a> = BTreeMap<&'a str, i32>;
 
@@ -138,27 +143,37 @@ fn main() {
 
     let observer = Observer::new(atomic_ints, ints);
 
+    let lib = dlopen::symbor::Library::open("test.dylib").expect("EEEE");
+    let test = env::load_test(&lib).expect("AAAA");
+
+    run_with_test(test, observer);
+}
+
+fn run_with_test<'a>(test: env::CTestApi<'a>, observer: Observer<'a>) {
     let nthreads = 2;
-    let mut handles: Vec<thread::JoinHandle<()>> = Vec::with_capacity(nthreads);
 
-    let b = test::TestBuilder::new(nthreads, observer.atomic_ints.len(), observer.ints.len());
+    let b = test::TestBuilder::new(test, nthreads, observer.atomic_ints.len(), observer.ints.len());
     let mob = Arc::new(Mutex::new(observer));
-
     let tests = b.build().unwrap();
-    for (i, t) in tests.into_iter().enumerate() {
-        let builder = thread::Builder::new().name(format!("P{0}", i));
-        let thrd = Thread {
-            observer: mob.clone(),
-        };
-        let h = builder.spawn(move || thrd.run(t.start())).unwrap();
-        handles.push(h)
-    }
 
-    // TODO(@MattWindsor91): the observations should only be visible from the environment once we've joined these threads
-    // in general, all of the thread-unsafe stuff should be hidden inside the environment
-    for h in handles.into_iter() {
-        h.join().unwrap();
-    }
+    thread::scope(|s| {
+        let mut handles: Vec<thread::ScopedJoinHandle<()>> = Vec::with_capacity(nthreads);
+
+        for (i, t) in tests.into_iter().enumerate() {
+            let builder = s.builder().name(format!("P{0}", i));
+            let thrd = Thread {
+                observer: mob.clone(),
+            };
+            let h = builder.spawn(move |_| thrd.run(t.start())).unwrap();
+            handles.push(h)
+        }
+
+        // TODO(@MattWindsor91): the observations should only be visible from the environment once we've joined these threads
+        // in general, all of the thread-unsafe stuff should be hidden inside the environment
+        for h in handles.into_iter() {
+            h.join().unwrap();
+        }
+    }).unwrap();
 
     if let Ok(m) = Arc::try_unwrap(mob) {
         for (k, v) in m.into_inner().unwrap().obs {

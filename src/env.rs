@@ -1,3 +1,5 @@
+use dlopen::symbor::{Library, SymBorApi, Symbol};
+
 use std::ptr;
 
 #[repr(C)]
@@ -13,9 +15,11 @@ extern "C" {
     pub fn get_int(e: *const UnsafeEnv, index: libc::size_t) -> libc::c_int;
     pub fn set_atomic_int(e: *mut UnsafeEnv, index: libc::size_t, value: libc::c_int);
     pub fn set_int(e: *mut UnsafeEnv, index: libc::size_t, value: libc::c_int);
+}
 
-    // for now
-    pub fn test(tid: libc::size_t, e: *mut UnsafeEnv);
+#[derive(SymBorApi, Clone)]
+pub struct CTestApi<'a> {
+    test: Symbol<'a, unsafe extern "C" fn(tid: libc::size_t, env: *mut UnsafeEnv)>
 }
 
 // Enumeration of errors that can happen with test creation.
@@ -23,8 +27,16 @@ extern "C" {
 pub enum Error {
     EnvAllocFailed,
     NotEnoughThreads,
+    DlopenFailed(dlopen::Error)
 }
 pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<dlopen::Error> for Error {
+    fn from(e : dlopen::Error) -> Self {
+        Self::DlopenFailed(e)
+    }
+}
+
 
 /// Thin layer over the C environment struct, also wrapping in the test stub.
 pub struct Env {
@@ -113,8 +125,15 @@ impl Env {
     }
 }
 
-pub type TestEntry<E> = fn(usize, &mut E);
+impl CTestApi<'_> {
+    pub fn run(&self, tid: usize, e: &mut Env) {
+        unsafe {
+            (self.test)(tid, e.p)
+        }
+    }
+}
 
-pub fn load_test() -> Result<TestEntry<Env>> {
-    Ok(|tid, env| unsafe { test(tid, env.p) })
+pub fn load_test<'a>(lib: &'a Library) -> Result<CTestApi<'a>> {
+    let c = unsafe { CTestApi::load(&lib) }?;
+    Ok(c)
 }
