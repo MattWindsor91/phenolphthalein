@@ -1,6 +1,8 @@
 #include <stdatomic.h>
 #include <stdlib.h>
+
 #include "env.h"
+#include "phenol.h"
 
 struct env *
 alloc_env(size_t atomic_ints, size_t ints)

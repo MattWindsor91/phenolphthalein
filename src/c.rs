@@ -18,6 +18,14 @@ extern "C" {
     fn set_int(e: *mut UnsafeEnv, index: libc::size_t, value: libc::c_int);
 }
 
+#[repr(C)]
+struct Manifest {
+    n_atomic_ints: libc::size_t,
+    atomic_int_names: *const *const libc::c_char,
+    n_ints: libc::size_t,
+    int_names: *const *const libc::c_char,
+}
+
 #[derive(SymBorApi, Clone)]
 pub struct CTestApi<'a> {
     test: Symbol<'a, unsafe extern "C" fn(tid: libc::size_t, env: *mut UnsafeEnv)>

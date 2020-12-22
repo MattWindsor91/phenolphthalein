@@ -1,16 +1,7 @@
 #ifndef ENV_H
 #define ENV_H
 
-struct env {
-    // The reference count of the environment; env is dead when this hits 0.
-    atomic_size_t rc;
-
-    size_t natomic_ints;
-    size_t nints;
-    
-    atomic_int *atomic_ints;
-    int *ints;
-};
+struct env;
 
 // Constructs a new environment with the given number of variable slots.
 struct env *alloc_env(size_t atomic_ints, size_t ints);
