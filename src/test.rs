@@ -2,9 +2,11 @@ use crate::env;
 use std::sync::{Arc, Barrier};
 
 /// Hidden implementation of all the various test structs.
+#[derive(Clone)]
 struct Test {
     tid: usize,
     e: env::Env,
+    entry: env::TestEntry<env::Env>,
     b: Arc<Barrier>,
 }
 
@@ -38,7 +40,7 @@ pub struct RunnableTest(Test);
 
 impl RunnableTest {
     pub fn run(mut self) -> RunOutcome {
-        self.0.e.run(self.0.tid);
+        (self.0.entry)(self.0.tid, &mut self.0.e);
         let bwr = self.0.b.wait();
         if bwr.is_leader() {
             RunOutcome::Observe(ObservableTest(self.0))
@@ -82,6 +84,7 @@ pub struct TestBuilder {
     num_threads: usize,
     num_atomic_ints: usize,
     num_ints: usize,
+    entry: Box<dyn Fn() -> env::Result<env::TestEntry<env::Env>>>,
 }
 
 impl TestBuilder {
@@ -90,6 +93,7 @@ impl TestBuilder {
             num_threads,
             num_atomic_ints,
             num_ints,
+            entry: Box::new(env::load_test),
         }
     }
 
@@ -99,22 +103,22 @@ impl TestBuilder {
         }
 
         let e = env::Env::new(self.num_atomic_ints, self.num_ints)?;
+        let entry = (self.entry)()?;
         let b = Arc::new(Barrier::new(self.num_threads));
-
-        let mut v = Vec::with_capacity(self.num_threads);
-        for tid in 0..self.num_threads - 1 {
-            v.push(ReadyTest(Test {
-                tid,
-                e: e.clone(),
-                b: b.clone(),
-            }));
-        }
-        v.push(ReadyTest(Test {
+        let test = Test {
             tid: self.num_threads - 1,
             e,
             b,
-        }));
+            entry,
+        };
+
+        let mut v = Vec::with_capacity(self.num_threads);
+        for tid in 0..self.num_threads - 1 {
+            let mut tc = test.clone();
+            tc.tid = tid;
+            v.push(ReadyTest(tc));
+        }
+        v.push(ReadyTest(test));
         Ok(v)
     }
 }
-

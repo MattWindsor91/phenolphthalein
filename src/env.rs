@@ -28,14 +28,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Thin layer over the C environment struct, also wrapping in the test stub.
 pub struct Env {
-    /// The entry point into the C test.
-    entry: unsafe extern "C" fn(libc::size_t, *mut UnsafeEnv),
     /// The C thread environment.
     p: *mut UnsafeEnv,
 }
 
 /// Trait of handles to an observable test environment.
-/// 
+///
 /// This trait currently mainly exists to hide parts of the actual environment
 /// that aren't thread-safe to run, but may be more useful later on.
 pub trait AnEnv {
@@ -52,13 +50,6 @@ pub trait AnEnv {
     fn set_atomic_int(&mut self, i: usize, v: i32);
 
     fn set_int(&mut self, i: usize, v: i32);
-}
-
-impl Env {
-    /// Runs the entry point.
-    pub fn run(&mut self, tid: usize) {
-        unsafe { (self.entry)(tid, self.p) }
-    }
 }
 
 impl AnEnv for Env {
@@ -104,19 +95,13 @@ impl Clone for Env {
         unsafe {
             p = copy_env(self.p);
         }
-        Env {
-            entry: self.entry,
-            p,
-        }
+        Env { p }
     }
 }
 
 impl Env {
     pub fn new(num_atomic_ints: usize, num_ints: usize) -> Result<Self> {
-        let mut e = Env {
-            p: ptr::null_mut(),
-            entry: test,
-        };
+        let mut e = Env { p: ptr::null_mut() };
         unsafe {
             e.p = alloc_env(num_atomic_ints, num_ints);
         }
@@ -126,4 +111,10 @@ impl Env {
             Ok(e)
         }
     }
+}
+
+pub type TestEntry<E> = fn(usize, &mut E);
+
+pub fn load_test() -> Result<TestEntry<Env>> {
+    Ok(|tid, env| unsafe { test(tid, env.p) })
 }

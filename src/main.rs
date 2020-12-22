@@ -33,7 +33,7 @@ impl<'a> Observer<'a> {
         self.reset(env)
     }
 
-    fn observe(&mut self, env: & dyn env::AnEnv) {
+    fn observe(&mut self, env: &dyn env::AnEnv) {
         let state = self.current_state(env);
         let inc = self.obs.get(&state).map_or(0, |k| k + 1);
         self.obs.insert(state, inc);
@@ -41,7 +41,7 @@ impl<'a> Observer<'a> {
 
     /// Gets the current state of the environment.
     /// Note that this is not thread-safe until all test threads are synchronised.
-    fn current_state(&self, env: & dyn env::AnEnv) -> State<'a> {
+    fn current_state(&self, env: &dyn env::AnEnv) -> State<'a> {
         // TODO(@MattWindsor91): work out a good state-machine-ish approach for
         // ensuring this can only be called when threads are quiescent.
         let mut s = State::new();
@@ -51,7 +51,7 @@ impl<'a> Observer<'a> {
         s
     }
 
-    fn atomic_int_values(&self, env: & dyn env::AnEnv) -> BTreeMap<&'a str, i32> {
+    fn atomic_int_values(&self, env: &dyn env::AnEnv) -> BTreeMap<&'a str, i32> {
         self.atomic_ints
             .iter()
             .enumerate()
@@ -59,7 +59,7 @@ impl<'a> Observer<'a> {
             .collect()
     }
 
-    fn int_values(&self, env: & dyn env::AnEnv) -> BTreeMap<&'a str, i32> {
+    fn int_values(&self, env: &dyn env::AnEnv) -> BTreeMap<&'a str, i32> {
         self.ints
             .iter()
             .enumerate()
