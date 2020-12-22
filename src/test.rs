@@ -1,12 +1,12 @@
-use crate::env;
+use crate::{c, env};
 use std::sync::{Arc, Barrier};
 
 /// Hidden implementation of all the various test structs.
 #[derive(Clone)]
 struct Test<'a> {
     tid: usize,
-    e: env::Env,
-    entry: env::CTestApi<'a>,
+    e: c::Env,
+    entry: c::CTestApi<'a>,
     b: Arc<Barrier>,
 }
 
@@ -84,11 +84,11 @@ pub struct TestBuilder<'a> {
     num_threads: usize,
     num_atomic_ints: usize,
     num_ints: usize,
-    entry: env::CTestApi<'a>
+    entry: c::CTestApi<'a>
 }
 
 impl<'a> TestBuilder<'a> {
-    pub fn new(entry: env::CTestApi<'a>, num_threads: usize, num_atomic_ints: usize, num_ints: usize) -> Self {
+    pub fn new(entry: c::CTestApi<'a>, num_threads: usize, num_atomic_ints: usize, num_ints: usize) -> Self {
         TestBuilder {
             num_threads,
             num_atomic_ints,
@@ -97,12 +97,12 @@ impl<'a> TestBuilder<'a> {
         }
     }
 
-    pub fn build(self) -> env::Result<Vec<ReadyTest<'a>>> {
+    pub fn build(self) -> c::Result<Vec<ReadyTest<'a>>> {
         if self.num_threads == 0 {
-            return Err(env::Error::NotEnoughThreads);
+            return Err(c::Error::NotEnoughThreads);
         }
 
-        let e = env::Env::new(self.num_atomic_ints, self.num_ints)?;
+        let e = c::Env::new(self.num_atomic_ints, self.num_ints)?;
         let entry = self.entry;
         let b = Arc::new(Barrier::new(self.num_threads));
         let test = Test {

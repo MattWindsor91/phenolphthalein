@@ -4,6 +4,7 @@ extern crate dlopen;
 extern crate dlopen_derive;
 extern crate libc;
 
+mod c;
 mod env;
 mod test;
 
@@ -144,12 +145,12 @@ fn main() {
     let observer = Observer::new(atomic_ints, ints);
 
     let lib = dlopen::symbor::Library::open("test.dylib").expect("EEEE");
-    let test = env::load_test(&lib).expect("AAAA");
+    let test = c::load_test(&lib).expect("AAAA");
 
     run_with_test(test, observer);
 }
 
-fn run_with_test<'a>(test: env::CTestApi<'a>, observer: Observer<'a>) {
+fn run_with_test<'a>(test: c::CTestApi<'a>, observer: Observer<'a>) {
     let nthreads = 2;
 
     let b = test::TestBuilder::new(test, nthreads, observer.atomic_ints.len(), observer.ints.len());
