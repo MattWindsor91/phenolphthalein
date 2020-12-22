@@ -35,6 +35,10 @@ extern "C" {
     fn set_int(e: *mut UnsafeEnv, index: libc::size_t, value: libc::c_int);
 }
 
+/// The manifest structure that the test implements to communicate auxiliary
+/// information to the test runner.
+///
+/// This must line up with 'struct manifest' in phenol.h.
 #[repr(C)]
 #[derive(Clone)]
 struct CManifest {
@@ -129,7 +133,7 @@ pub struct CTestApi<'a> {
     test: Symbol<'a, unsafe extern "C" fn(tid: libc::size_t, env: *mut UnsafeEnv)>,
 }
 
-/// Thin layer over the C environment struct, also wrapping in the test stub.
+/// Thin layer over the C environment struct.
 pub struct Env {
     /// The C thread environment.
     p: *mut UnsafeEnv,
