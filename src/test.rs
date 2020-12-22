@@ -80,7 +80,7 @@ impl<'a> ObservableTest<'a> {
     }
 }
 
-pub fn build<'a>(entry: c::CTestApi<'a>, mf: manifest::Manifest) -> c::Result<Vec<ReadyTest<'a>>> {
+pub fn build(entry: c::CTestApi, mf: manifest::Manifest) -> c::Result<Vec<ReadyTest>> {
     // TODO(@MattWindsor91): make it so that we wrap the manifest up with the
     // test and can't separate the two.
 

@@ -6,8 +6,8 @@ extern crate libc;
 
 mod c;
 mod env;
-mod test;
 mod manifest;
+mod test;
 
 use crossbeam::thread;
 use std::collections::{BTreeMap, HashMap};
@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
    as they are held by the parent Observer's Manifest for the entire scope that
    States are available; trying to get this to work with borrowck has proven a
    little difficult.
-*/   
+*/
 
 type State = BTreeMap<String, i32>;
 
@@ -59,14 +59,16 @@ impl Observer {
     }
 
     fn atomic_int_values(&self, env: &dyn env::AnEnv) -> State {
-        self.manifest.atomic_int_names()
+        self.manifest
+            .atomic_int_names()
             .enumerate()
             .map(|(i, n)| (n.to_string(), env.atomic_int(i)))
             .collect()
     }
 
     fn int_values(&self, env: &dyn env::AnEnv) -> State {
-        self.manifest.int_names()
+        self.manifest
+            .int_names()
             .enumerate()
             .map(|(i, n)| (n.to_string(), env.int(i)))
             .collect()
@@ -108,7 +110,6 @@ impl<'a> Thread {
     }
 }
 
-
 fn main() {
     run().unwrap();
 }
@@ -119,7 +120,7 @@ fn run() -> c::Result<()> {
     run_with_test(test)
 }
 
-fn run_with_test<'a>(test: c::CTestApi<'a>) -> c::Result<()> {
+fn run_with_test(test: c::CTestApi) -> c::Result<()> {
     let manifest = test.make_manifest()?;
     let observer = Observer::new(manifest.clone());
 
@@ -143,7 +144,8 @@ fn run_with_test<'a>(test: c::CTestApi<'a>) -> c::Result<()> {
         for h in handles.into_iter() {
             h.join().unwrap();
         }
-    }).unwrap();
+    })
+    .unwrap();
 
     if let Ok(m) = Arc::try_unwrap(mob) {
         for (k, v) in m.into_inner().unwrap().obs {

@@ -10,16 +10,15 @@ use std::{collections::BTreeMap, ffi, ptr};
 pub enum Error {
     EnvAllocFailed,
     NotEnoughThreads,
-    DlopenFailed(dlopen::Error)
+    DlopenFailed(dlopen::Error),
 }
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl From<dlopen::Error> for Error {
-    fn from(e : dlopen::Error) -> Self {
+    fn from(e: dlopen::Error) -> Self {
         Self::DlopenFailed(e)
     }
 }
-
 
 #[repr(C)]
 struct UnsafeEnv {
@@ -40,45 +39,47 @@ extern "C" {
 #[derive(Clone)]
 struct CManifest {
     /// Number of threads in this test.
-    n_threads : libc::size_t,
+    n_threads: libc::size_t,
     /// Number of atomic_ints in this test.
-    n_atomic_ints : libc::size_t,
+    n_atomic_ints: libc::size_t,
     /// Number of ints in this test.
-    n_ints : libc::size_t,
+    n_ints: libc::size_t,
     /// Initial value for each atomic_int.
-    atomic_int_initials : *const libc::c_int,
+    atomic_int_initials: *const libc::c_int,
     /// Initial value for each int.
-    int_initials : *const libc::c_int,
+    int_initials: *const libc::c_int,
     /// Name of each atomic_int.
-    atomic_int_names : *const *const libc::c_char,
+    atomic_int_names: *const *const libc::c_char,
     /// Name of each int.
-    int_names : *const *const libc::c_char,
+    int_names: *const *const libc::c_char,
 }
 
 /// Unsafe because in general we don't know how src and n relate.
 unsafe fn names(src: *const *const libc::c_char, n: libc::size_t) -> Vec<String> {
     if n == 0 {
-        vec!()
+        vec![]
     } else {
         std::slice::from_raw_parts(src, n)
-        .iter()
-        .map(|ptr| ffi::CStr::from_ptr(*ptr).to_string_lossy().into_owned())
-        .collect()
+            .iter()
+            .map(|ptr| ffi::CStr::from_ptr(*ptr).to_string_lossy().into_owned())
+            .collect()
     }
 }
 
 unsafe fn initials(src: *const libc::c_int, n: libc::size_t) -> Vec<i32> {
     if n == 0 {
-        vec!()
+        vec![]
     } else {
         std::slice::from_raw_parts(src, n).to_vec()
     }
 }
 
-fn lift_to_var_map<T>(names: Vec<String>, inits: Vec<T>) ->
-  BTreeMap<String, manifest::VarRecord<T>> {
-    let records = inits.into_iter().map(|x| manifest::VarRecord{
-        initial_value: Some(x)
+fn lift_to_var_map<T>(
+    names: Vec<String>,
+    inits: Vec<T>,
+) -> BTreeMap<String, manifest::VarRecord<T>> {
+    let records = inits.into_iter().map(|x| manifest::VarRecord {
+        initial_value: Some(x),
     });
     names.into_iter().zip(records).collect()
 }
@@ -93,8 +94,7 @@ impl CManifest {
     }
 
     fn atomic_int_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
-        lift_to_var_map(self.atomic_int_name_vec(),
-            self.atomic_int_initial_vec())
+        lift_to_var_map(self.atomic_int_name_vec(), self.atomic_int_initial_vec())
     }
 
     fn int_name_vec(&self) -> Vec<String> {
@@ -106,15 +106,14 @@ impl CManifest {
     }
 
     fn int_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
-        lift_to_var_map(self.int_name_vec(),
-            self.int_initial_vec())
+        lift_to_var_map(self.int_name_vec(), self.int_initial_vec())
     }
 
     fn to_manifest(&self) -> Result<manifest::Manifest> {
         if self.n_threads == 0 {
-            Err (Error::NotEnoughThreads)
+            Err(Error::NotEnoughThreads)
         } else {
-            Ok (manifest::Manifest{
+            Ok(manifest::Manifest {
                 n_threads: self.n_threads,
                 atomic_ints: self.atomic_int_map(),
                 ints: self.int_map(),
@@ -127,7 +126,7 @@ impl CManifest {
 pub struct CTestApi<'a> {
     manifest: Ref<'a, CManifest>,
 
-    test: Symbol<'a, unsafe extern "C" fn(tid: libc::size_t, env: *mut UnsafeEnv)>
+    test: Symbol<'a, unsafe extern "C" fn(tid: libc::size_t, env: *mut UnsafeEnv)>,
 }
 
 /// Thin layer over the C environment struct, also wrapping in the test stub.
@@ -199,18 +198,15 @@ impl Env {
 
 impl CTestApi<'_> {
     pub fn run(&self, tid: usize, e: &mut Env) {
-        unsafe {
-            (self.test)(tid, e.p)
-        }
+        unsafe { (self.test)(tid, e.p) }
     }
-
 
     pub fn make_manifest(&self) -> Result<manifest::Manifest> {
         self.manifest.to_manifest()
     }
 }
 
-pub fn load_test<'a>(lib: &'a Library) -> Result<CTestApi<'a>> {
+pub fn load_test(lib: &Library) -> Result<CTestApi> {
     let c = unsafe { CTestApi::load(&lib) }?;
     Ok(c)
 }
