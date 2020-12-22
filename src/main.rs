@@ -7,28 +7,29 @@ extern crate libc;
 mod c;
 mod env;
 mod test;
+mod manifest;
 
 use crossbeam::thread;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
-type State<'a> = BTreeMap<&'a str, i32>;
+/* TODO(@MattWindsor91): morally, a State should only borrow the variable names,
+   as they are held by the parent Observer's Manifest for the entire scope that
+   States are available; trying to get this to work with borrowck has proven a
+   little difficult.
+*/   
 
-struct Observer<'a> {
-    atomic_ints: BTreeMap<&'a str, VarRecord<i32>>,
-    ints: BTreeMap<&'a str, VarRecord<i32>>,
+type State = BTreeMap<String, i32>;
 
-    pub obs: HashMap<State<'a>, usize>,
+struct Observer {
+    pub manifest: manifest::Manifest,
+    pub obs: HashMap<State, usize>,
 }
 
-impl<'a> Observer<'a> {
-    pub fn new(
-        atomic_ints: BTreeMap<&'a str, VarRecord<i32>>,
-        ints: BTreeMap<&'a str, VarRecord<i32>>,
-    ) -> Self {
+impl Observer {
+    pub fn new(manifest: manifest::Manifest) -> Self {
         Observer {
-            atomic_ints,
-            ints,
+            manifest,
             obs: HashMap::new(),
         }
     }
@@ -47,48 +48,46 @@ impl<'a> Observer<'a> {
 
     /// Gets the current state of the environment.
     /// Note that this is not thread-safe until all test threads are synchronised.
-    fn current_state(&self, env: &dyn env::AnEnv) -> State<'a> {
+    fn current_state(&self, env: &dyn env::AnEnv) -> State {
         // TODO(@MattWindsor91): work out a good state-machine-ish approach for
         // ensuring this can only be called when threads are quiescent.
         let mut s = State::new();
         // TODO(@MattWindsor91): have one great big iterator for values and collect it.
-        s.extend(self.atomic_int_values(env).iter());
-        s.extend(self.int_values(env).iter());
+        s.extend(self.atomic_int_values(env));
+        s.extend(self.int_values(env));
         s
     }
 
-    fn atomic_int_values(&self, env: &dyn env::AnEnv) -> BTreeMap<&'a str, i32> {
-        self.atomic_ints
-            .iter()
+    fn atomic_int_values(&self, env: &dyn env::AnEnv) -> State {
+        self.manifest.atomic_int_names()
             .enumerate()
-            .map(|(i, (n, _))| (*n, env.atomic_int(i)))
+            .map(|(i, n)| (n.to_string(), env.atomic_int(i)))
             .collect()
     }
 
-    fn int_values(&self, env: &dyn env::AnEnv) -> BTreeMap<&'a str, i32> {
-        self.ints
-            .iter()
+    fn int_values(&self, env: &dyn env::AnEnv) -> State {
+        self.manifest.int_names()
             .enumerate()
-            .map(|(i, (n, _))| (*n, env.int(i)))
+            .map(|(i, n)| (n.to_string(), env.int(i)))
             .collect()
     }
 
     /// Resets every variable in the environment to its initial value.
     fn reset(&mut self, env: &mut dyn env::AnEnv) {
-        for (i, (_, r)) in self.atomic_ints.iter().enumerate() {
+        for (i, (_, r)) in self.manifest.atomic_ints.iter().enumerate() {
             env.set_atomic_int(i, r.initial_value.unwrap_or(0))
         }
-        for (i, (_, r)) in self.ints.iter().enumerate() {
+        for (i, (_, r)) in self.manifest.ints.iter().enumerate() {
             env.set_int(i, r.initial_value.unwrap_or(0))
         }
     }
 }
 
-struct Thread<'a> {
-    observer: Arc<Mutex<Observer<'a>>>,
+struct Thread {
+    observer: Arc<Mutex<Observer>>,
 }
 
-impl<'a> Thread<'a> {
+impl<'a> Thread {
     fn run(&self, t: test::RunnableTest) {
         let mut t = t;
         for _i in 0..=100 {
@@ -109,56 +108,26 @@ impl<'a> Thread<'a> {
     }
 }
 
-struct VarRecord<T> {
-    initial_value: Option<T>, // Space for rent
-}
 
 fn main() {
-    let mut atomic_ints = BTreeMap::new();
-    atomic_ints.insert(
-        "x",
-        VarRecord {
-            initial_value: Some(0),
-        },
-    );
-    atomic_ints.insert(
-        "y",
-        VarRecord {
-            initial_value: Some(0),
-        },
-    );
-
-    let mut ints = BTreeMap::new();
-    ints.insert(
-        "0:r0",
-        VarRecord {
-            initial_value: Some(0),
-        },
-    );
-    ints.insert(
-        "1:r0",
-        VarRecord {
-            initial_value: Some(0),
-        },
-    );
-
-    let observer = Observer::new(atomic_ints, ints);
-
-    let lib = dlopen::symbor::Library::open("test.dylib").expect("EEEE");
-    let test = c::load_test(&lib).expect("AAAA");
-
-    run_with_test(test, observer);
+    run().unwrap();
 }
 
-fn run_with_test<'a>(test: c::CTestApi<'a>, observer: Observer<'a>) {
-    let nthreads = 2;
+fn run() -> c::Result<()> {
+    let lib = dlopen::symbor::Library::open("test.dylib")?;
+    let test = c::load_test(&lib)?;
+    run_with_test(test)
+}
 
-    let b = test::TestBuilder::new(test, nthreads, observer.atomic_ints.len(), observer.ints.len());
+fn run_with_test<'a>(test: c::CTestApi<'a>) -> c::Result<()> {
+    let manifest = test.make_manifest()?;
+    let observer = Observer::new(manifest.clone());
+
+    let tests = test::build(test, manifest)?;
     let mob = Arc::new(Mutex::new(observer));
-    let tests = b.build().unwrap();
 
     thread::scope(|s| {
-        let mut handles: Vec<thread::ScopedJoinHandle<()>> = Vec::with_capacity(nthreads);
+        let mut handles: Vec<thread::ScopedJoinHandle<()>> = Vec::with_capacity(tests.len());
 
         for (i, t) in tests.into_iter().enumerate() {
             let builder = s.builder().name(format!("P{0}", i));
@@ -180,5 +149,8 @@ fn run_with_test<'a>(test: c::CTestApi<'a>, observer: Observer<'a>) {
         for (k, v) in m.into_inner().unwrap().obs {
             println!("{0:?}: {1}", k, v);
         }
+        // nb: this needs to percolate into an error if it fails.
     }
+
+    Ok(())
 }

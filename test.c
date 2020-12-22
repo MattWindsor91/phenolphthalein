@@ -1,3 +1,5 @@
+/* This is an example C 'litmus test' lifted to the phenolphthalein test ABI. */
+
 #include <stdatomic.h>
 #include "phenol.h"
 
@@ -5,10 +7,10 @@ int atomic_int_initials[2] = {0, 0};
 int int_initials[2] = {0, 0};
 const char *atomic_int_names[2] = {"x", "y"};
 const char *int_names[2] = {"0:r0", "1:r0"};
-struct manifest MANIFEST = {
-    .nthreads = 2,
-    .natomic_ints = 2,
-    .nints = 2,
+struct manifest manifest = {
+    .n_threads = 2,
+    .n_atomic_ints = 2,
+    .n_ints = 2,
     .atomic_int_initials = atomic_int_initials,
     .int_initials = int_initials,
     .atomic_int_names = atomic_int_names,

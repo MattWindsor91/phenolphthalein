@@ -1,7 +1,25 @@
-use dlopen::symbor::{Library, SymBorApi, Symbol};
+use dlopen::symbor::{Library, Ref, SymBorApi, Symbol};
 
-use crate::env;
-use std::ptr;
+use crate::{env, manifest};
+use std::{collections::BTreeMap, ffi, ptr};
+
+// TODO(@MattWindsor): move Error, Result
+
+/// Enumeration of errors that can happen with test creation.
+#[derive(Debug)]
+pub enum Error {
+    EnvAllocFailed,
+    NotEnoughThreads,
+    DlopenFailed(dlopen::Error)
+}
+pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<dlopen::Error> for Error {
+    fn from(e : dlopen::Error) -> Self {
+        Self::DlopenFailed(e)
+    }
+}
+
 
 #[repr(C)]
 struct UnsafeEnv {
@@ -19,33 +37,98 @@ extern "C" {
 }
 
 #[repr(C)]
-struct Manifest {
-    n_atomic_ints: libc::size_t,
-    atomic_int_names: *const *const libc::c_char,
-    n_ints: libc::size_t,
-    int_names: *const *const libc::c_char,
+#[derive(Clone)]
+struct CManifest {
+    /// Number of threads in this test.
+    n_threads : libc::size_t,
+    /// Number of atomic_ints in this test.
+    n_atomic_ints : libc::size_t,
+    /// Number of ints in this test.
+    n_ints : libc::size_t,
+    /// Initial value for each atomic_int.
+    atomic_int_initials : *const libc::c_int,
+    /// Initial value for each int.
+    int_initials : *const libc::c_int,
+    /// Name of each atomic_int.
+    atomic_int_names : *const *const libc::c_char,
+    /// Name of each int.
+    int_names : *const *const libc::c_char,
+}
+
+/// Unsafe because in general we don't know how src and n relate.
+unsafe fn names(src: *const *const libc::c_char, n: libc::size_t) -> Vec<String> {
+    if n == 0 {
+        vec!()
+    } else {
+        std::slice::from_raw_parts(src, n)
+        .iter()
+        .map(|ptr| ffi::CStr::from_ptr(*ptr).to_string_lossy().into_owned())
+        .collect()
+    }
+}
+
+unsafe fn initials(src: *const libc::c_int, n: libc::size_t) -> Vec<i32> {
+    if n == 0 {
+        vec!()
+    } else {
+        std::slice::from_raw_parts(src, n).to_vec()
+    }
+}
+
+fn lift_to_var_map<T>(names: Vec<String>, inits: Vec<T>) ->
+  BTreeMap<String, manifest::VarRecord<T>> {
+    let records = inits.into_iter().map(|x| manifest::VarRecord{
+        initial_value: Some(x)
+    });
+    names.into_iter().zip(records).collect()
+}
+
+impl CManifest {
+    fn atomic_int_name_vec(&self) -> Vec<String> {
+        unsafe { names(self.atomic_int_names, self.n_atomic_ints) }
+    }
+
+    fn atomic_int_initial_vec(&self) -> Vec<i32> {
+        unsafe { initials(self.atomic_int_initials, self.n_atomic_ints) }
+    }
+
+    fn atomic_int_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
+        lift_to_var_map(self.atomic_int_name_vec(),
+            self.atomic_int_initial_vec())
+    }
+
+    fn int_name_vec(&self) -> Vec<String> {
+        unsafe { names(self.int_names, self.n_ints) }
+    }
+
+    fn int_initial_vec(&self) -> Vec<i32> {
+        unsafe { initials(self.int_initials, self.n_ints) }
+    }
+
+    fn int_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
+        lift_to_var_map(self.int_name_vec(),
+            self.int_initial_vec())
+    }
+
+    fn to_manifest(&self) -> Result<manifest::Manifest> {
+        if self.n_threads == 0 {
+            Err (Error::NotEnoughThreads)
+        } else {
+            Ok (manifest::Manifest{
+                n_threads: self.n_threads,
+                atomic_ints: self.atomic_int_map(),
+                ints: self.int_map(),
+            })
+        }
+    }
 }
 
 #[derive(SymBorApi, Clone)]
 pub struct CTestApi<'a> {
+    manifest: Ref<'a, CManifest>,
+
     test: Symbol<'a, unsafe extern "C" fn(tid: libc::size_t, env: *mut UnsafeEnv)>
 }
-
-// Enumeration of errors that can happen with test creation.
-#[derive(Debug)]
-pub enum Error {
-    EnvAllocFailed,
-    NotEnoughThreads,
-    DlopenFailed(dlopen::Error)
-}
-pub type Result<T> = std::result::Result<T, Error>;
-
-impl From<dlopen::Error> for Error {
-    fn from(e : dlopen::Error) -> Self {
-        Self::DlopenFailed(e)
-    }
-}
-
 
 /// Thin layer over the C environment struct, also wrapping in the test stub.
 pub struct Env {
@@ -119,6 +202,11 @@ impl CTestApi<'_> {
         unsafe {
             (self.test)(tid, e.p)
         }
+    }
+
+
+    pub fn make_manifest(&self) -> Result<manifest::Manifest> {
+        self.manifest.to_manifest()
     }
 }
 

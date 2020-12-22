@@ -1,4 +1,4 @@
-use crate::{c, env};
+use crate::{c, env, manifest};
 use std::sync::{Arc, Barrier};
 
 /// Hidden implementation of all the various test structs.
@@ -80,45 +80,25 @@ impl<'a> ObservableTest<'a> {
     }
 }
 
-pub struct TestBuilder<'a> {
-    num_threads: usize,
-    num_atomic_ints: usize,
-    num_ints: usize,
-    entry: c::CTestApi<'a>
-}
+pub fn build<'a>(entry: c::CTestApi<'a>, mf: manifest::Manifest) -> c::Result<Vec<ReadyTest<'a>>> {
+    // TODO(@MattWindsor91): make it so that we wrap the manifest up with the
+    // test and can't separate the two.
 
-impl<'a> TestBuilder<'a> {
-    pub fn new(entry: c::CTestApi<'a>, num_threads: usize, num_atomic_ints: usize, num_ints: usize) -> Self {
-        TestBuilder {
-            num_threads,
-            num_atomic_ints,
-            num_ints,
-            entry
-        }
+    let e = c::Env::new(mf.atomic_ints.len(), mf.ints.len())?;
+    let b = Arc::new(Barrier::new(mf.n_threads));
+    let test = Test {
+        tid: mf.n_threads - 1,
+        e,
+        b,
+        entry,
+    };
+
+    let mut v = Vec::with_capacity(mf.n_threads);
+    for tid in 0..mf.n_threads - 1 {
+        let mut tc = test.clone();
+        tc.tid = tid;
+        v.push(ReadyTest(tc));
     }
-
-    pub fn build(self) -> c::Result<Vec<ReadyTest<'a>>> {
-        if self.num_threads == 0 {
-            return Err(c::Error::NotEnoughThreads);
-        }
-
-        let e = c::Env::new(self.num_atomic_ints, self.num_ints)?;
-        let entry = self.entry;
-        let b = Arc::new(Barrier::new(self.num_threads));
-        let test = Test {
-            tid: self.num_threads - 1,
-            e,
-            b,
-            entry,
-        };
-
-        let mut v = Vec::with_capacity(self.num_threads);
-        for tid in 0..self.num_threads - 1 {
-            let mut tc = test.clone();
-            tc.tid = tid;
-            v.push(ReadyTest(tc));
-        }
-        v.push(ReadyTest(test));
-        Ok(v)
-    }
+    v.push(ReadyTest(test));
+    Ok(v)
 }
