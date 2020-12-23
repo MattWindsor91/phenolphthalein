@@ -7,7 +7,8 @@ use std::collections::{BTreeMap, HashMap};
    little difficult.
 */
 
-type State = BTreeMap<String, i32>;
+/// An observation after a particular test iteration.
+type Obs = BTreeMap<String, i32>;
 
 /// Type of functions that can check an environment.
 pub trait Checker: Sync + Send + Clone {
@@ -19,19 +20,24 @@ pub trait Checker: Sync + Send + Clone {
 
 pub struct Observer {
     manifest: manifest::Manifest,
-    pub obs: HashMap<State, StateInfo>,
+
+    /// The observations that this observer has made so far.
+    pub obs: HashMap<Obs, Info>,
 }
 
-pub struct StateInfo {
+/// Information about an observation.
+pub struct Info {
+    /// The number of times this observation has occurred.
     pub occurs: usize,
+    /// The result of asking the test to check this observation.
     pub check_result: bool,
 }
 
-impl StateInfo {
-    /// Computes the StateInfo resulting from increasing this StateInfo's
+impl Info {
+    /// Computes the Info resulting from increasing this Info's
     /// occurs count by 1.
-    pub fn inc(&self) -> StateInfo {
-        StateInfo {
+    pub fn inc(&self) -> Info {
+        Info {
             occurs: self.occurs + 1,
             check_result: self.check_result,
         }
@@ -65,29 +71,27 @@ impl Observer {
         let inc = self.obs.get(&state).map_or_else(
             || {
                 let check_result = checker.check(env);
-                StateInfo {
+                Info {
                     occurs: 1,
                     check_result,
                 }
             },
-            StateInfo::inc,
+            Info::inc,
         );
         self.obs.insert(state, inc);
     }
 
     /// Gets the current state of the environment.
     /// Note that this is not thread-safe until all test threads are synchronised.
-    fn current_state<T: env::Env>(&self, env: &T) -> State {
-        // TODO(@MattWindsor91): work out a good state-machine-ish approach for
-        // ensuring this can only be called when threads are quiescent.
-        let mut s = State::new();
+    fn current_state<T: env::Env>(&self, env: &T) -> Obs {
+        let mut s = Obs::new();
         // TODO(@MattWindsor91): have one great big iterator for values and collect it.
         s.extend(self.atomic_int_values(env));
         s.extend(self.int_values(env));
         s
     }
 
-    fn atomic_int_values<T: env::Env>(&self, env: &T) -> State {
+    fn atomic_int_values<T: env::Env>(&self, env: &T) -> Obs {
         self.manifest
             .atomic_int_names()
             .enumerate()
@@ -95,7 +99,7 @@ impl Observer {
             .collect()
     }
 
-    fn int_values<T: env::Env>(&self, env: &T) -> State {
+    fn int_values<T: env::Env>(&self, env: &T) -> Obs {
         self.manifest
             .int_names()
             .enumerate()
