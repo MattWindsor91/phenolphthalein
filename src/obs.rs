@@ -10,9 +10,9 @@ use std::collections::{BTreeMap, HashMap};
 type State = BTreeMap<String, i32>;
 
 /// Type of functions that can check an environment.
-pub trait Checker: Sync + Send {
+pub trait Checker: Sync + Send + Clone {
     // The type of the environment this checker checks.
-    type Env;
+    type Env: env::Env;
 
     fn check(&self, env: &Self::Env) -> bool;
 }
@@ -47,18 +47,18 @@ impl Observer {
     }
 
     /// Observes a test environment into this runner's observations.
-    pub fn observe_and_reset<T, C>(&mut self, env: &mut T, checker: &C)
-    where
-        T: env::AnEnv,
-        C: Checker<Env = T>,
-    {
+    pub fn observe_and_reset<T: env::Env, C: Checker<Env = T>>(
+        &mut self,
+        env: &mut T,
+        checker: &C,
+    ) {
         self.observe(env, checker);
         self.reset(env)
     }
 
     fn observe<T, C>(&mut self, env: &mut T, checker: &C)
     where
-        T: env::AnEnv,
+        T: env::Env,
         C: Checker<Env = T>,
     {
         let state = self.current_state(env);
@@ -77,10 +77,7 @@ impl Observer {
 
     /// Gets the current state of the environment.
     /// Note that this is not thread-safe until all test threads are synchronised.
-    fn current_state<T>(&self, env: &T) -> State
-    where
-        T: env::AnEnv,
-    {
+    fn current_state<T: env::Env>(&self, env: &T) -> State {
         // TODO(@MattWindsor91): work out a good state-machine-ish approach for
         // ensuring this can only be called when threads are quiescent.
         let mut s = State::new();
@@ -90,10 +87,7 @@ impl Observer {
         s
     }
 
-    fn atomic_int_values<T>(&self, env: &T) -> State
-    where
-        T: env::AnEnv,
-    {
+    fn atomic_int_values<T: env::Env>(&self, env: &T) -> State {
         self.manifest
             .atomic_int_names()
             .enumerate()
@@ -101,10 +95,7 @@ impl Observer {
             .collect()
     }
 
-    fn int_values<T>(&self, env: &T) -> State
-    where
-        T: env::AnEnv,
-    {
+    fn int_values<T: env::Env>(&self, env: &T) -> State {
         self.manifest
             .int_names()
             .enumerate()
@@ -113,10 +104,7 @@ impl Observer {
     }
 
     /// Resets every variable in the environment to its initial value.
-    fn reset<T>(&mut self, env: &mut T)
-    where
-        T: env::AnEnv,
-    {
+    fn reset<T: env::Env>(&mut self, env: &mut T) {
         // TODO(@MattWindsor91): this seems an odd inversion of control?
 
         for (i, (_, r)) in self.manifest.atomic_ints.iter().enumerate() {

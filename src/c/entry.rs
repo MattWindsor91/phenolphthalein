@@ -1,30 +1,34 @@
-use dlopen::symbor::{Library, Ref, SymBorApi, Symbol};
+use dlopen::symbor::{Container, Ref, SymBorApi, Symbol};
 
 use super::{env, manifest};
 use crate::{err, manifest as m, obs, test};
 
 /// Entry point for C-ABI tests coming from dynamically loaded libraries.
 #[derive(SymBorApi, Clone)]
-pub struct CTestApi<'a> {
+pub struct Entry<'a> {
     manifest: Ref<'a, manifest::Manifest>,
 
     test: Symbol<'a, unsafe extern "C" fn(tid: libc::size_t, env: *mut env::UnsafeEnv)>,
     check: Symbol<'a, unsafe extern "C" fn(env: *const env::UnsafeEnv) -> bool>,
 }
 
-pub struct CChecker<'a>(Symbol<'a, unsafe extern "C" fn(env: *const env::UnsafeEnv) -> bool>);
+/// A checker for C-ABI test environments.
+#[derive(Clone)]
+pub struct Checker<'a> {
+    sym: Symbol<'a, unsafe extern "C" fn(env: *const env::UnsafeEnv) -> bool>,
+}
 
-impl<'a> obs::Checker for CChecker<'a> {
+impl<'a> obs::Checker for Checker<'a> {
     type Env = env::Env;
 
     fn check(&self, e: &Self::Env) -> bool {
-        unsafe { (self.0)(e.p) }
+        unsafe { (self.sym)(e.p) }
     }
 }
 
-impl<'a> test::Entry for CTestApi<'a> {
+impl<'a> test::Entry for Entry<'a> {
     type Env = env::Env;
-    type Checker = CChecker<'a>;
+    type Checker = Checker<'a>;
 
     fn run(&self, tid: usize, e: &mut Self::Env) {
         unsafe { (self.test)(tid, e.p) }
@@ -36,11 +40,28 @@ impl<'a> test::Entry for CTestApi<'a> {
 
     /// Gets a checker for this test.
     fn checker(&self) -> Self::Checker {
-        CChecker(self.check)
+        Checker { sym: self.check }
     }
 }
 
-pub fn load_test(lib: &Library) -> err::Result<CTestApi> {
-    let c = unsafe { CTestApi::load(&lib) }?;
-    Ok(c)
+/// A test that holds onto a dynamically loaded test library.
+pub struct Test {
+    c: Container<Entry<'static>>,
+}
+
+impl Test {
+    /// Loads a test from a dynamic library at `file`.
+    pub fn load(file: &str) -> err::Result<Self> {
+        let c = unsafe { Container::load(file) }?;
+        // TODO(@MattWindsor91): perform basic safety checks.
+        Ok(Test { c })
+    }
+}
+
+impl<'a> test::Test<'a> for Test {
+    type Entry = Entry<'a>;
+
+    fn spawn(&self) -> self::Entry<'a> {
+        self.c.clone()
+    }
 }

@@ -29,7 +29,7 @@ pub struct Env {
     pub(super) p: *mut UnsafeEnv,
 }
 
-impl env::AnEnv for Env {
+impl env::Env for Env {
     /// Gets the atomic integer in slot i.
     /// Assumes that the C implementation does range checking and returns a
     /// valid but undefined result if i is out of bounds.

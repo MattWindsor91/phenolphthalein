@@ -1,11 +1,15 @@
-use crate::{env, env::AnEnv, err, manifest, obs};
+use crate::{env::Env, err, manifest, obs};
 use std::sync::{Arc, Barrier};
 
-/// Trait of entry points into tests.
-pub trait Entry {
+/// Trait of cloneable entry points into tests.
+pub trait Entry: Clone {
+    /* NOTE(@MattWindsor91): this will likely need a lifetime adding to it
+    eventually; I think its lack of one thus far is a quirk of how
+    dlopen Containers manage lifetimes. */
+
     /// Every test entry has an associated environment type, which implements
     /// a fairly basic API for inspection and resetting.
-    type Env: env::AnEnv;
+    type Env: Env;
 
     /// Test entries must also have an associated checker type, for checking
     /// environments uphold test conditions.
@@ -21,17 +25,28 @@ pub trait Entry {
     fn checker(&self) -> Self::Checker;
 }
 
-/// Hidden implementation of all the various test structs.
+/// Trait of top-level tests.
+///
+/// Each test can spawn multiple entry points into itself.
+pub trait Test<'a> {
+    /// The type of entry point into the test.
+    type Entry: Entry;
+
+    /// Spawns a new entry point into the test.
+    fn spawn(&self) -> Self::Entry;
+}
+
+/// Hidden implementation of all the various test handles.
 #[derive(Clone)]
-struct Test<T, E> {
+struct Inner<T, E> {
     tid: usize,
     env: E,
     entry: T,
     b: Arc<Barrier>,
 }
 
-/// A test that is ready to send to its thread.
-pub struct ReadyTest<T, E>(Test<T, E>);
+/// A test handle that is ready to send to its thread.
+pub struct Ready<T, E>(Inner<T, E>);
 
 /// We can 'safely' send ReadyTests across thread boundaries.
 ///
@@ -42,64 +57,64 @@ pub struct ReadyTest<T, E>(Test<T, E>);
 /// The main rationale for this being 'mostly ok' to send across thread
 /// boundaries is that the test wrappers constrain the operations we can perform
 /// in respect to the thread barriers.
-unsafe impl<T, E> Send for ReadyTest<T, E> {}
+unsafe impl<T, E> Send for Ready<T, E> {}
 
 /// We can 'safely' send references to Envs across thread boundaries.
 ///
 /// See the Sync implementation for the handwave.
-unsafe impl<T, E> Sync for ReadyTest<T, E> {}
+unsafe impl<T, E> Sync for Ready<T, E> {}
 
-impl<T, E> ReadyTest<T, E> {
-    pub fn start(self) -> RunnableTest<T, E> {
-        RunnableTest(self.0)
+impl<T, E> Ready<T, E> {
+    pub fn start(self) -> Runnable<T, E> {
+        Runnable(self.0)
     }
 }
 
-/// A test that is in the runnable position.
-pub struct RunnableTest<T, E>(Test<T, E>);
+/// A test handle that is in the runnable position.
+pub struct Runnable<T, E>(Inner<T, E>);
 
-impl<T> RunnableTest<T, T::Env>
-where
-    T: Entry,
-{
+impl<T: Entry> Runnable<T, T::Env> {
     pub fn run(mut self) -> RunOutcome<T, T::Env> {
         self.0.entry.run(self.0.tid, &mut self.0.env);
         let bwr = self.0.b.wait();
         if bwr.is_leader() {
-            RunOutcome::Observe(ObservableTest(self.0))
+            RunOutcome::Observe(Observable(self.0))
         } else {
-            RunOutcome::Wait(WaitingTest(self.0))
+            RunOutcome::Wait(Waiting(self.0))
         }
     }
 }
 
-/// A test that is in the waiting position.
-pub struct WaitingTest<T, E>(Test<T, E>);
+/// A test handle that is in the waiting position.
+pub struct Waiting<T, E>(Inner<T, E>);
 
-impl<T, E> WaitingTest<T, E> {
-    pub fn wait(self) -> RunnableTest<T, E> {
+impl<T, E> Waiting<T, E> {
+    pub fn wait(self) -> Runnable<T, E> {
         self.0.b.wait();
-        RunnableTest(self.0)
+        Runnable(self.0)
     }
 }
 
-/// A test that is in the observable position.
-pub struct ObservableTest<T, E>(Test<T, E>);
+/// A test handle that is in the observable position.
+pub struct Observable<T, E>(Inner<T, E>);
 
 pub enum RunOutcome<T, E> {
     /// This thread should wait until it can run again.
-    Wait(WaitingTest<T, E>),
+    Wait(Waiting<T, E>),
     /// This thread should read the current state, then wait until it can run again.
-    Observe(ObservableTest<T, E>),
+    Observe(Observable<T, E>),
 }
 
-impl<T, E> ObservableTest<T, E> {
+impl<T, E> Observable<T, E> {
+    /// Borrows access to the test's shared environment.
     pub fn env(&mut self) -> &mut E {
         &mut self.0.env
     }
 
-    pub fn relinquish(self) -> WaitingTest<T, E> {
-        WaitingTest(self.0)
+    /// Relinquishes the ability to observe the environment, and returns to a
+    /// waiting state.
+    pub fn relinquish(self) -> Waiting<T, E> {
+        Waiting(self.0)
     }
 }
 
@@ -108,19 +123,14 @@ pub struct Bundle<T, E> {
     /// The test manifest.
     pub manifest: manifest::Manifest,
 
-    pub handles: Vec<ReadyTest<T, E>>,
+    pub handles: Vec<Ready<T, E>>,
 }
 
-pub fn build<T>(entry: T) -> err::Result<Bundle<T, T::Env>>
-where
-    T: Entry,
-    T: Clone,
-    T::Env: Clone,
-{
+pub fn build<T: Entry>(entry: T) -> err::Result<Bundle<T, T::Env>> {
     let manifest = entry.make_manifest()?;
     let env = T::Env::for_manifest(&manifest)?;
     let b = Arc::new(Barrier::new(manifest.n_threads));
-    let test = Test {
+    let inner = Inner {
         tid: manifest.n_threads - 1,
         env,
         b,
@@ -129,10 +139,10 @@ where
 
     let mut handles = Vec::with_capacity(manifest.n_threads);
     for tid in 0..manifest.n_threads - 1 {
-        let mut tc = test.clone();
+        let mut tc = inner.clone();
         tc.tid = tid;
-        handles.push(ReadyTest(tc));
+        handles.push(Ready(tc));
     }
-    handles.push(ReadyTest(test));
+    handles.push(Ready(inner));
     Ok(Bundle { manifest, handles })
 }

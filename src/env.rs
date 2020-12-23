@@ -4,7 +4,7 @@ use crate::{err, manifest};
 ///
 /// This trait currently mainly exists to hide parts of the actual environment
 /// that aren't thread-safe to run, but may be more useful later on.
-pub trait AnEnv: Sized {
+pub trait Env: Sized + Clone {
     /// Constructs an environment for the given manifest.
     fn for_manifest(m: &manifest::Manifest) -> err::Result<Self>;
 
