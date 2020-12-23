@@ -3,7 +3,6 @@ use dlopen::symbor::{Library, Ref, SymBorApi, Symbol};
 use super::{env, manifest};
 use crate::{err, manifest as m, obs, test};
 
-
 /// Entry point for C-ABI tests coming from dynamically loaded libraries.
 #[derive(SymBorApi, Clone)]
 pub struct CTestApi<'a> {

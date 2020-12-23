@@ -2,4 +2,4 @@ mod entry;
 mod env;
 mod manifest;
 
-pub use entry::{CChecker, CTestApi, load_test};
+pub use entry::{load_test, CChecker, CTestApi};

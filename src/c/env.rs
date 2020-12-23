@@ -2,7 +2,7 @@ use crate::{env, err, manifest};
 use std::ptr;
 
 /// Dummy object used to represent pointers to C environments.
-/// 
+///
 /// Some parts of the C ABI need to work with this directly, so it is exposed
 /// throughout the `c` module.
 #[repr(C)]
@@ -23,7 +23,7 @@ extern "C" {
 /// Thin layer over the C environment struct.
 pub struct Env {
     /// The C thread environment.
-    /// 
+    ///
     /// Some parts of the C ABI need to work with this directly, so it is exposed
     /// throughout the `c` module.
     pub(super) p: *mut UnsafeEnv,
@@ -70,7 +70,7 @@ impl Drop for Env {
 }
 
 /// Envs can be cloned.
-/// 
+///
 /// We again rely on the `UnsafeEnv` to implement the right semantics.
 impl Clone for Env {
     fn clone(&self) -> Self {
