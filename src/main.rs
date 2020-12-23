@@ -7,6 +7,7 @@ extern crate libc;
 mod c;
 mod env;
 mod err;
+mod fsa;
 mod manifest;
 mod obs;
 mod test;
@@ -21,15 +22,15 @@ struct Thread<C> {
 }
 
 impl<C: obs::Checker> Thread<C> {
-    fn run<T>(&self, t: test::Runnable<T, C::Env>)
+    fn run<T>(&self, t: fsa::Runnable<T, C::Env>)
     where
         T: test::Entry<Env = C::Env>,
     {
         let mut t = t;
         for _i in 0..=100 {
             match t.run() {
-                test::RunOutcome::Wait(w) => t = w.wait(),
-                test::RunOutcome::Observe(mut o) => {
+                fsa::RunOutcome::Wait(w) => t = w.wait(),
+                fsa::RunOutcome::Observe(mut o) => {
                     self.observe_and_reset(o.env());
                     t = o.relinquish().wait()
                 }
@@ -56,7 +57,7 @@ fn run() -> err::Result<()> {
 fn run_with_entry<T: test::Entry>(entry: T) -> err::Result<()> {
     let checker = entry.checker();
 
-    let test::Bundle { handles, manifest } = test::build(entry)?;
+    let fsa::Bundle { handles, manifest } = fsa::build(entry)?;
     let observer = obs::Observer::new(manifest);
     let mob = Arc::new(Mutex::new(observer));
 
