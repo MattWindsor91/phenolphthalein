@@ -1,24 +1,7 @@
 use dlopen::symbor::{Library, Ref, SymBorApi, Symbol};
 
-use crate::{env, manifest};
+use crate::{env, err, manifest, obs, test};
 use std::{collections::BTreeMap, ffi, ptr};
-
-// TODO(@MattWindsor): move Error, Result
-
-/// Enumeration of errors that can happen with test creation.
-#[derive(Debug)]
-pub enum Error {
-    EnvAllocFailed,
-    NotEnoughThreads,
-    DlopenFailed(dlopen::Error),
-}
-pub type Result<T> = std::result::Result<T, Error>;
-
-impl From<dlopen::Error> for Error {
-    fn from(e: dlopen::Error) -> Self {
-        Self::DlopenFailed(e)
-    }
-}
 
 #[repr(C)]
 struct UnsafeEnv {
@@ -58,6 +41,44 @@ struct CManifest {
     int_names: *const *const libc::c_char,
 }
 
+impl CManifest {
+    fn atomic_int_name_vec(&self) -> Vec<String> {
+        unsafe { names(self.atomic_int_names, self.n_atomic_ints) }
+    }
+
+    fn atomic_int_initial_vec(&self) -> Vec<i32> {
+        unsafe { initials(self.atomic_int_initials, self.n_atomic_ints) }
+    }
+
+    fn atomic_int_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
+        lift_to_var_map(self.atomic_int_name_vec(), self.atomic_int_initial_vec())
+    }
+
+    fn int_name_vec(&self) -> Vec<String> {
+        unsafe { names(self.int_names, self.n_ints) }
+    }
+
+    fn int_initial_vec(&self) -> Vec<i32> {
+        unsafe { initials(self.int_initials, self.n_ints) }
+    }
+
+    fn int_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
+        lift_to_var_map(self.int_name_vec(), self.int_initial_vec())
+    }
+
+    fn to_manifest(&self) -> err::Result<manifest::Manifest> {
+        if self.n_threads == 0 {
+            Err(err::Error::NotEnoughThreads)
+        } else {
+            Ok(manifest::Manifest {
+                n_threads: self.n_threads,
+                atomic_ints: self.atomic_int_map(),
+                ints: self.int_map(),
+            })
+        }
+    }
+}
+
 /// Unsafe because in general we don't know how src and n relate.
 unsafe fn names(src: *const *const libc::c_char, n: libc::size_t) -> Vec<String> {
     if n == 0 {
@@ -88,49 +109,12 @@ fn lift_to_var_map<T>(
     names.into_iter().zip(records).collect()
 }
 
-impl CManifest {
-    fn atomic_int_name_vec(&self) -> Vec<String> {
-        unsafe { names(self.atomic_int_names, self.n_atomic_ints) }
-    }
-
-    fn atomic_int_initial_vec(&self) -> Vec<i32> {
-        unsafe { initials(self.atomic_int_initials, self.n_atomic_ints) }
-    }
-
-    fn atomic_int_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
-        lift_to_var_map(self.atomic_int_name_vec(), self.atomic_int_initial_vec())
-    }
-
-    fn int_name_vec(&self) -> Vec<String> {
-        unsafe { names(self.int_names, self.n_ints) }
-    }
-
-    fn int_initial_vec(&self) -> Vec<i32> {
-        unsafe { initials(self.int_initials, self.n_ints) }
-    }
-
-    fn int_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
-        lift_to_var_map(self.int_name_vec(), self.int_initial_vec())
-    }
-
-    fn to_manifest(&self) -> Result<manifest::Manifest> {
-        if self.n_threads == 0 {
-            Err(Error::NotEnoughThreads)
-        } else {
-            Ok(manifest::Manifest {
-                n_threads: self.n_threads,
-                atomic_ints: self.atomic_int_map(),
-                ints: self.int_map(),
-            })
-        }
-    }
-}
-
 #[derive(SymBorApi, Clone)]
 pub struct CTestApi<'a> {
     manifest: Ref<'a, CManifest>,
 
     test: Symbol<'a, unsafe extern "C" fn(tid: libc::size_t, env: *mut UnsafeEnv)>,
+    check: Symbol<'a, unsafe extern "C" fn(env: *const UnsafeEnv) -> bool>,
 }
 
 /// Thin layer over the C environment struct.
@@ -161,6 +145,10 @@ impl env::AnEnv for Env {
     fn set_int(&mut self, i: usize, v: i32) {
         unsafe { set_int(self.p, i, v) }
     }
+
+    fn for_manifest(m: &manifest::Manifest) -> err::Result<Self> {
+        Self::new(m.atomic_ints.len(), m.ints.len())
+    }
 }
 
 /// Envs can be dropped.
@@ -187,30 +175,48 @@ impl Clone for Env {
 }
 
 impl Env {
-    pub fn new(num_atomic_ints: usize, num_ints: usize) -> Result<Self> {
+    pub fn new(num_atomic_ints: usize, num_ints: usize) -> err::Result<Self> {
         let mut e = Env { p: ptr::null_mut() };
         unsafe {
             e.p = alloc_env(num_atomic_ints, num_ints);
         }
         if e.p.is_null() {
-            Err(Error::EnvAllocFailed)
+            Err(err::Error::EnvAllocFailed)
         } else {
             Ok(e)
         }
     }
 }
 
-impl CTestApi<'_> {
-    pub fn run(&self, tid: usize, e: &mut Env) {
-        unsafe { (self.test)(tid, e.p) }
-    }
+pub struct CChecker<'a>(Symbol<'a, unsafe extern "C" fn(env: *const UnsafeEnv) -> bool>);
 
-    pub fn make_manifest(&self) -> Result<manifest::Manifest> {
-        self.manifest.to_manifest()
+impl<'a> obs::Checker for CChecker<'a> {
+    type Env = Env;
+
+    fn check(&self, e: &self::Env) -> bool {
+        unsafe { (self.0)(e.p) }
     }
 }
 
-pub fn load_test(lib: &Library) -> Result<CTestApi> {
+impl<'a> test::Entry for CTestApi<'a> {
+    type Env = Env;
+    type Checker = CChecker<'a>;
+
+    fn run(&self, tid: usize, e: &mut Env) {
+        unsafe { (self.test)(tid, e.p) }
+    }
+
+    fn make_manifest(&self) -> err::Result<manifest::Manifest> {
+        self.manifest.to_manifest()
+    }
+
+    /// Gets a checker for this test.
+    fn checker(&self) -> Self::Checker {
+        CChecker(self.check)
+    }
+}
+
+pub fn load_test(lib: &Library) -> err::Result<CTestApi> {
     let c = unsafe { CTestApi::load(&lib) }?;
     Ok(c)
 }

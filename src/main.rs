@@ -6,19 +6,29 @@ extern crate libc;
 
 mod c;
 mod env;
+mod err;
 mod manifest;
 mod obs;
 mod test;
 
 use crossbeam::thread;
 use std::sync::{Arc, Mutex};
+use test::Entry;
 
-struct Thread {
+struct Thread<C> {
+    checker: C,
     observer: Arc<Mutex<obs::Observer>>,
 }
 
-impl<'a> Thread {
-    fn run(&self, t: test::RunnableTest) {
+impl<C> Thread<C>
+where
+    C: obs::Checker,
+{
+    fn run<T>(&self, t: test::RunnableTest<T, C::Env>)
+    where
+        T: test::Entry<Env = C::Env>,
+        C::Env: env::AnEnv,
+    {
         let mut t = t;
         for _i in 0..=100 {
             match t.run() {
@@ -31,10 +41,13 @@ impl<'a> Thread {
         }
     }
 
-    fn observe_and_reset(&self, e: &mut dyn env::AnEnv) {
+    fn observe_and_reset(&self, env: &mut C::Env)
+    where
+        C::Env: env::AnEnv,
+    {
         // TODO(@MattWindsor91): handle poisoning here
         let mut g = self.observer.lock().unwrap();
-        g.observe_and_reset(e);
+        g.observe_and_reset(env, &self.checker);
     }
 }
 
@@ -42,34 +55,33 @@ fn main() {
     run().unwrap();
 }
 
-fn run() -> c::Result<()> {
+fn run() -> err::Result<()> {
     let lib = dlopen::symbor::Library::open("test.dylib")?;
     let test = c::load_test(&lib)?;
     run_with_test(test)
 }
 
-fn run_with_test(test: c::CTestApi) -> c::Result<()> {
-    let manifest = test.make_manifest()?;
-    let observer = obs::Observer::new(manifest.clone());
-
-    let tests = test::build(test, manifest)?;
+fn run_with_test(entry: c::CTestApi) -> err::Result<()> {
+    let test::Bundle { handles, manifest } = test::build(entry.clone())?;
+    let observer = obs::Observer::new(manifest);
     let mob = Arc::new(Mutex::new(observer));
 
     thread::scope(|s| {
-        let mut handles: Vec<thread::ScopedJoinHandle<()>> = Vec::with_capacity(tests.len());
+        let mut joins: Vec<thread::ScopedJoinHandle<()>> = Vec::with_capacity(handles.len());
 
-        for (i, t) in tests.into_iter().enumerate() {
+        for (i, t) in handles.into_iter().enumerate() {
             let builder = s.builder().name(format!("P{0}", i));
-            let thrd = Thread {
+            let thrd = Thread::<c::CChecker> {
+                checker: entry.checker(),
                 observer: mob.clone(),
             };
             let h = builder.spawn(move |_| thrd.run(t.start())).unwrap();
-            handles.push(h)
+            joins.push(h)
         }
 
         // TODO(@MattWindsor91): the observations should only be visible from the environment once we've joined these threads
         // in general, all of the thread-unsafe stuff should be hidden inside the environment
-        for h in handles.into_iter() {
+        for h in joins.into_iter() {
             h.join().unwrap();
         }
     })
@@ -77,7 +89,12 @@ fn run_with_test(test: c::CTestApi) -> c::Result<()> {
 
     if let Ok(m) = Arc::try_unwrap(mob) {
         for (k, v) in m.into_inner().unwrap().obs {
-            println!("{0:?}: {1}", k, v);
+            println!(
+                "{1} {2}> {0:?}",
+                k,
+                v.occurs,
+                if v.check_result { "*" } else { ":" }
+            );
         }
         // nb: this needs to percolate into an error if it fails.
     }

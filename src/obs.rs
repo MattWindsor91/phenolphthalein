@@ -9,9 +9,33 @@ use std::collections::{BTreeMap, HashMap};
 
 type State = BTreeMap<String, i32>;
 
+/// Type of functions that can check an environment.
+pub trait Checker: Sync + Send {
+    // The type of the environment this checker checks.
+    type Env;
+
+    fn check(&self, env: &Self::Env) -> bool;
+}
+
 pub struct Observer {
     manifest: manifest::Manifest,
-    pub obs: HashMap<State, usize>,
+    pub obs: HashMap<State, StateInfo>,
+}
+
+pub struct StateInfo {
+    pub occurs: usize,
+    pub check_result: bool,
+}
+
+impl StateInfo {
+    /// Computes the StateInfo resulting from increasing this StateInfo's
+    /// occurs count by 1.
+    pub fn inc(&self) -> StateInfo {
+        StateInfo {
+            occurs: self.occurs + 1,
+            check_result: self.check_result,
+        }
+    }
 }
 
 impl Observer {
@@ -23,20 +47,40 @@ impl Observer {
     }
 
     /// Observes a test environment into this runner's observations.
-    pub fn observe_and_reset(&mut self, env: &mut dyn env::AnEnv) {
-        self.observe(env);
+    pub fn observe_and_reset<T, C>(&mut self, env: &mut T, checker: &C)
+    where
+        T: env::AnEnv,
+        C: Checker<Env = T>,
+    {
+        self.observe(env, checker);
         self.reset(env)
     }
 
-    fn observe(&mut self, env: &dyn env::AnEnv) {
+    fn observe<T, C>(&mut self, env: &mut T, checker: &C)
+    where
+        T: env::AnEnv,
+        C: Checker<Env = T>,
+    {
         let state = self.current_state(env);
-        let inc = self.obs.get(&state).map_or(0, |k| k + 1);
+        let inc = self.obs.get(&state).map_or_else(
+            || {
+                let check_result = checker.check(env);
+                StateInfo {
+                    occurs: 1,
+                    check_result,
+                }
+            },
+            StateInfo::inc,
+        );
         self.obs.insert(state, inc);
     }
 
     /// Gets the current state of the environment.
     /// Note that this is not thread-safe until all test threads are synchronised.
-    fn current_state(&self, env: &dyn env::AnEnv) -> State {
+    fn current_state<T>(&self, env: &T) -> State
+    where
+        T: env::AnEnv,
+    {
         // TODO(@MattWindsor91): work out a good state-machine-ish approach for
         // ensuring this can only be called when threads are quiescent.
         let mut s = State::new();
@@ -46,7 +90,10 @@ impl Observer {
         s
     }
 
-    fn atomic_int_values(&self, env: &dyn env::AnEnv) -> State {
+    fn atomic_int_values<T>(&self, env: &T) -> State
+    where
+        T: env::AnEnv,
+    {
         self.manifest
             .atomic_int_names()
             .enumerate()
@@ -54,7 +101,10 @@ impl Observer {
             .collect()
     }
 
-    fn int_values(&self, env: &dyn env::AnEnv) -> State {
+    fn int_values<T>(&self, env: &T) -> State
+    where
+        T: env::AnEnv,
+    {
         self.manifest
             .int_names()
             .enumerate()
@@ -63,7 +113,12 @@ impl Observer {
     }
 
     /// Resets every variable in the environment to its initial value.
-    fn reset(&mut self, env: &mut dyn env::AnEnv) {
+    fn reset<T>(&mut self, env: &mut T)
+    where
+        T: env::AnEnv,
+    {
+        // TODO(@MattWindsor91): this seems an odd inversion of control?
+
         for (i, (_, r)) in self.manifest.atomic_ints.iter().enumerate() {
             env.set_atomic_int(i, r.initial_value.unwrap_or(0))
         }

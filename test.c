@@ -1,6 +1,7 @@
 /* This is an example C 'litmus test' lifted to the phenolphthalein test ABI. */
 
 #include <stdatomic.h>
+#include <stdbool.h>
 #include "phenol.h"
 
 int atomic_int_initials[2] = {0, 0};
@@ -36,4 +37,18 @@ test(size_t tid, struct env *e)
 {
     if (tid == 0) P0(e->atomic_ints, e->atomic_ints+1, e->ints);
     if (tid == 1) P1(e->atomic_ints, e->atomic_ints+1, e->ints+1);
+}
+
+bool
+check(const struct env *e)
+{
+    int x = e->atomic_ints[0];
+    int y = e->atomic_ints[1];
+    int t0r0 = e->ints[0];
+    int t1r0 = e->ints[1];
+
+    if (x == 1 && y == 1 && t0r0 == 0 && t1r0 == 0) return true;
+    if (x == 1 && y == 1 && t0r0 == 0 && t1r0 == 1) return true;
+    if (x == 1 && y == 1 && t0r0 == 1 && t1r0 == 0) return true;
+    return false;
 }
