@@ -53,7 +53,7 @@ impl Observer {
         Observer {
             manifest,
             obs: HashMap::new(),
-            iterations: 0
+            iterations: 0,
         }
     }
 

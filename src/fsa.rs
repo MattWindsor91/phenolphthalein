@@ -1,5 +1,7 @@
-use crossbeam::atomic::AtomicCell;
+//! The main testing finite state automaton, and helper functions for it.
+
 use super::{env::Env, err, manifest, test};
+use crossbeam::atomic::AtomicCell;
 use std::sync::{Arc, Barrier};
 
 /// Common functionality for states in the testing finite automaton.
@@ -53,7 +55,7 @@ impl<T: test::Entry> Runnable<T, T::Env> {
     /// Runs another iteration of this FSA's thread body.
     pub fn run(mut self) -> RunOutcome<T, T::Env> {
         if self.0.dead.load() {
-            return RunOutcome::Done(Done {tid: self.0.tid})
+            return RunOutcome::Done(Done { tid: self.0.tid });
         }
 
         self.0.entry.run(self.0.tid, &mut self.0.env);
@@ -116,7 +118,7 @@ impl<T, E> Observable<T, E> {
     /// dead, and returns to a waiting state.
     pub fn kill(self) -> Waiting<T, E> {
         /* TODO(@MattWindsor91): maybe return Done here, and mock up waiting
-           on the final barrier, or return Waiting<Done> somehow. */
+        on the final barrier, or return Waiting<Done> somehow. */
         self.0.dead.store(true);
         self.relinquish()
     }
@@ -148,23 +150,33 @@ pub struct Bundle<T, E> {
     /// The test manifest.
     pub manifest: manifest::Manifest,
 
-    pub handles: ReadySet<T, E>,
+    /// A set of automata for each thread in the test.
+    pub automata: Set<T, E>,
+}
+
+impl<T: test::Entry> Bundle<T, T::Env> {
+    /// Constructs a bundle from the given test entry.
+    pub fn new(entry: T) -> err::Result<Self> {
+        let manifest = entry.make_manifest()?;
+        let automata = Set::new(entry, manifest.clone())?;
+        Ok(Bundle { manifest, automata })
+    }
 }
 
 /// A set of test FSAs, ready to be sent to threads and run.
 ///
-/// We can always decompose a `ReadySet` into a single set of use-once FSAs,
+/// We can always decompose a `Set` into a single set of use-once FSAs,
 /// but it is unsafe to clone the set whenever the existing set is being used,
-/// and so we only provide specific support for reconstituting `ReadySet`s at
+/// and so we only provide specific support for reconstituting `Set`s at
 /// the end of particular patterns of use.
-pub struct ReadySet<T, E> {
+pub struct Set<T, E> {
     vec: Vec<Inner<T, E>>,
 }
 
-impl<T: Clone, E: Clone> ReadySet<T, E> {
+impl<T: Clone, E: Clone> Set<T, E> {
     /// Spawns a series of threadlike objects using the FSAs in this set,
     /// joins on each to retrieve evidence that the FSA is done, and returns
-    /// a copy of this `ReadySet`.
+    /// a copy of this `Set`.
     ///
     /// This method exists to allow situations where we want to re-run the FSAs
     /// of a test on multiple thread configurations, and attempts to prevent
@@ -185,12 +197,40 @@ impl<T: Clone, E: Clone> ReadySet<T, E> {
         for h in handles {
             join(h)?;
         }
-        Ok(ReadySet { vec })
+        Ok(Set { vec })
     }
 }
 
-/// We can consume a ReadySet into an iterator over Ready FSA handles.
-impl<T, E> IntoIterator for ReadySet<T, E> {
+impl<T: test::Entry> Set<T, T::Env> {
+    /// Constructs a `Set` from a test entry point and its associated manifest.
+    ///
+    /// This function isn't public because it relies on the manifest and entry
+    /// point matching up.
+    fn new(entry: T, manifest: manifest::Manifest) -> err::Result<Self> {
+        let env = T::Env::for_manifest(&manifest)?;
+        let b = Arc::new(Barrier::new(manifest.n_threads));
+        let inner = Inner {
+            tid: manifest.n_threads - 1,
+            env,
+            b,
+            entry,
+            dead: Arc::new(AtomicCell::new(false)),
+        };
+        let mut automata = Set {
+            vec: Vec::with_capacity(manifest.n_threads),
+        };
+        for tid in 0..manifest.n_threads - 1 {
+            let mut tc = inner.clone();
+            tc.tid = tid;
+            automata.vec.push(tc);
+        }
+        automata.vec.push(inner);
+        Ok(automata)
+    }
+}
+
+/// We can consume a Set into an iterator over Ready FSA handles.
+impl<T, E> IntoIterator for Set<T, E> {
     type Item = Ready<T, E>;
 
     type IntoIter = SetIter<T, E>;
@@ -203,7 +243,7 @@ impl<T, E> IntoIterator for ReadySet<T, E> {
 /// Type alias of taking `Ready` as a function.
 type Readier<T, E> = fn(Inner<T, E>) -> Ready<T, E>;
 
-/// Iterator produced by iterating on `ReadySet`s.
+/// Iterator produced by iterating on `Set`s.
 pub struct SetIter<T, E>(
     // This mainly just exists so that we don't leak `Inner`, which we would
     // do if we set this to a type alias.
@@ -216,28 +256,4 @@ impl<T, E> Iterator for SetIter<T, E> {
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
     }
-}
-
-pub fn build<T: test::Entry>(entry: T) -> err::Result<Bundle<T, T::Env>> {
-    let manifest = entry.make_manifest()?;
-    let env = T::Env::for_manifest(&manifest)?;
-    let b = Arc::new(Barrier::new(manifest.n_threads));
-    let inner = Inner {
-        tid: manifest.n_threads - 1,
-        env,
-        b,
-        entry,
-        dead: Arc::new(AtomicCell::new(false))
-    };
-
-    let mut handles = ReadySet {
-        vec: Vec::with_capacity(manifest.n_threads),
-    };
-    for tid in 0..manifest.n_threads - 1 {
-        let mut tc = inner.clone();
-        tc.tid = tid;
-        handles.vec.push(tc);
-    }
-    handles.vec.push(inner);
-    Ok(Bundle { manifest, handles })
 }

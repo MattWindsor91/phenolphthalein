@@ -64,12 +64,12 @@ fn run() -> err::Result<()> {
 fn run_with_entry<T: test::Entry>(entry: T) -> err::Result<()> {
     let checker = entry.checker();
 
-    let fsa::Bundle { handles, manifest } = fsa::build(entry)?;
+    let fsa::Bundle { automata, manifest } = fsa::Bundle::new(entry)?;
     let observer = obs::Observer::new(manifest);
     let mob = Arc::new(Mutex::new(observer));
 
     thread::scope(|s| {
-        handles.run(
+        automata.run(
             |r: fsa::Ready<T, T::Env>| {
                 let builder = s.builder().name(format!("P{0}", r.tid()));
                 let thrd = Thread::<T::Checker> {
