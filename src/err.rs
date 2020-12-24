@@ -1,4 +1,4 @@
-/// Enumeration of errors that can happen with test creation.
+/// Enumeration of errors that can happen in phenolphthalein.
 #[derive(Debug)]
 pub enum Error {
     EnvAllocFailed,
