@@ -22,3 +22,43 @@ pub trait Env: Sized + Clone {
 
     fn set_int(&mut self, i: usize, v: i32);
 }
+
+/// A borrowed environment combined with a borrowed manifest.
+///
+/// Bundling these two together lets us interpret the environment using the
+/// manifest.
+///
+/// For this to be safe, we assume that the environment gracefully handles any
+/// mismatches between itself and the manifest.
+pub struct Manifested<'a, T> {
+    pub manifest: &'a manifest::Manifest,
+    pub env: &'a mut T,
+}
+
+impl<'a, T: Env> Manifested<'a, T> {
+    /// Resets the environment to the initial values in the manifest.
+    pub fn reset(&mut self) {
+        for (i, (_, r)) in self.manifest.atomic_ints.iter().enumerate() {
+            self.env.set_atomic_int(i, r.initial_value.unwrap_or(0))
+        }
+        for (i, (_, r)) in self.manifest.ints.iter().enumerate() {
+            self.env.set_int(i, r.initial_value.unwrap_or(0))
+        }
+    }
+
+    // Iterates over all of the atomic integer variables in the environment.
+    pub fn atomic_int_values(&self) -> impl Iterator<Item = (String, i32)> + '_ {
+        self.manifest
+            .atomic_int_names()
+            .enumerate()
+            .map(move |(i, n)| (n.to_string(), self.env.atomic_int(i)))
+    }
+
+    // Iterates over all of the integer variables in the environment.
+    pub fn int_values(&self) -> impl Iterator<Item = (String, i32)> + '_ {
+        self.manifest
+            .int_names()
+            .enumerate()
+            .map(move |(i, n)| (n.to_string(), self.env.int(i)))
+    }
+}

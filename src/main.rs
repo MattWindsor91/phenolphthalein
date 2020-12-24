@@ -18,8 +18,6 @@ use fsa::Fsa;
 use std::sync::{Arc, Mutex};
 use test::Test;
 
-
-
 fn main() {
     run().unwrap();
 }
@@ -33,11 +31,12 @@ fn run_with_entry<T: test::Entry>(entry: T) -> err::Result<()> {
     let checker = entry.checker();
 
     let fsa::Bundle { automata, manifest } = fsa::Bundle::new(entry)?;
-    let observer = obs::Observer::new(manifest);
-    let shin = run::SharedState{
+    let observer = obs::Observer::new();
+    let shin = run::SharedState {
         conds: run::ExitCondition::ExitOnNIterations(1000),
         observer,
-        checker
+        checker,
+        manifest,
     };
     let shared = Arc::new(Mutex::new(shin));
 

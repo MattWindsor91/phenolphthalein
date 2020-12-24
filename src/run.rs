@@ -1,12 +1,12 @@
 //! The high-level test runner.
 
-use crate::{obs, fsa, test};
+use crate::{env, fsa, manifest, obs, test};
 use std::sync::{Arc, Mutex};
 
 /// An exit condition for a test run.
 pub enum ExitCondition {
     /// The test should exit when the iteration count reaches this number.
-    ExitOnNIterations(usize)
+    ExitOnNIterations(usize),
 }
 
 impl ExitCondition {
@@ -14,7 +14,7 @@ impl ExitCondition {
     /// observation os.
     pub fn should_exit(&self, os: &obs::Summary) -> bool {
         match self {
-            Self::ExitOnNIterations(n) => *n <= os.iterations
+            Self::ExitOnNIterations(n) => *n <= os.iterations,
         }
     }
 }
@@ -63,11 +63,19 @@ pub struct SharedState<C> {
     pub conds: ExitCondition,
     /// The observer for the test.
     pub observer: obs::Observer,
+    /// The manifest for the test.
+    pub manifest: manifest::Manifest,
 }
 
 impl<C: obs::Checker> SharedState<C> {
+    /// Handles the environment, including observing it and resetting it.
     fn handle(&mut self, env: &mut C::Env) -> bool {
-        let summary = self.observer.observe_and_reset(env, &self.checker);
+        let mut m = env::Manifested {
+            manifest: &self.manifest,
+            env,
+        };
+        let summary = self.observer.observe(&mut m, &self.checker);
+        m.reset();
         self.conds.should_exit(&summary)
     }
 }

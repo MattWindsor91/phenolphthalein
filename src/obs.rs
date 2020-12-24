@@ -1,4 +1,4 @@
-use crate::{env, manifest};
+use crate::env;
 use std::collections::{BTreeMap, HashMap};
 
 /* TODO(@MattWindsor91): morally, a State should only borrow the variable names,
@@ -28,9 +28,8 @@ pub enum CheckResult {
     Failed,
 }
 
+/// An observer for the outcomes of a test.
 pub struct Observer {
-    manifest: manifest::Manifest,
-
     /// The observations that this observer has made so far.
     pub obs: HashMap<Obs, Info>,
 
@@ -59,35 +58,36 @@ impl Info {
 }
 
 impl Observer {
-    pub fn new(manifest: manifest::Manifest) -> Self {
+    pub fn new() -> Self {
         Observer {
-            manifest,
             obs: HashMap::new(),
             iterations: 0,
         }
     }
 
     /// Observes a test environment into this runner's observations.
-    pub fn observe_and_reset<T: env::Env, C: Checker<Env = T>>(
+    pub fn observe<T: env::Env, C: Checker<Env = T>>(
         &mut self,
-        env: &mut T,
+        env: &mut env::Manifested<T>,
         checker: &C,
     ) -> Summary {
-        let info = self.observe(env, checker);
-        self.reset(env);
+        let info = self.observe_state(env, checker);
         self.iterations += 1;
-        Summary {iterations: self.iterations, info}
+        Summary {
+            iterations: self.iterations,
+            info,
+        }
     }
 
-    fn observe<T, C>(&mut self, env: &mut T, checker: &C) -> Info
-    where
-        T: env::Env,
-        C: Checker<Env = T>,
-    {
-        let state = self.current_state(env);
+    fn observe_state<T: env::Env, C: Checker<Env = T>>(
+        &mut self,
+        env: &mut env::Manifested<T>,
+        checker: &C,
+    ) -> Info {
+        let state = current_state(env);
         let info = self.obs.get(&state).map_or_else(
             || {
-                let check_result = checker.check(env);
+                let check_result = checker.check(env.env);
                 Info {
                     occurs: 1,
                     check_result,
@@ -98,44 +98,16 @@ impl Observer {
         self.obs.insert(state, info);
         info
     }
+}
 
-    /// Gets the current state of the environment.
-    /// Note that this is not thread-safe until all test threads are synchronised.
-    fn current_state<T: env::Env>(&self, env: &T) -> Obs {
-        let mut s = Obs::new();
-        // TODO(@MattWindsor91): have one great big iterator for values and collect it.
-        s.extend(self.atomic_int_values(env));
-        s.extend(self.int_values(env));
-        s
-    }
-
-    fn atomic_int_values<T: env::Env>(&self, env: &T) -> Obs {
-        self.manifest
-            .atomic_int_names()
-            .enumerate()
-            .map(|(i, n)| (n.to_string(), env.atomic_int(i)))
-            .collect()
-    }
-
-    fn int_values<T: env::Env>(&self, env: &T) -> Obs {
-        self.manifest
-            .int_names()
-            .enumerate()
-            .map(|(i, n)| (n.to_string(), env.int(i)))
-            .collect()
-    }
-
-    /// Resets every variable in the environment to its initial value.
-    fn reset<T: env::Env>(&mut self, env: &mut T) {
-        // TODO(@MattWindsor91): this seems an odd inversion of control?
-
-        for (i, (_, r)) in self.manifest.atomic_ints.iter().enumerate() {
-            env.set_atomic_int(i, r.initial_value.unwrap_or(0))
-        }
-        for (i, (_, r)) in self.manifest.ints.iter().enumerate() {
-            env.set_int(i, r.initial_value.unwrap_or(0))
-        }
-    }
+/// Gets the current state of the environment.
+/// Note that this is not thread-safe until all test threads are synchronised.
+fn current_state<T: env::Env>(env: &env::Manifested<T>) -> Obs {
+    let mut s = Obs::new();
+    // TODO(@MattWindsor91): have one great big iterator for values and collect it.
+    s.extend(env.atomic_int_values());
+    s.extend(env.int_values());
+    s
 }
 
 /// A summary of the observer's current state, useful for calculating test
@@ -146,5 +118,5 @@ pub struct Summary {
     pub iterations: usize,
 
     /// The information from the current observation.
-    pub info: Info
+    pub info: Info,
 }
