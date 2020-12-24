@@ -83,12 +83,57 @@ struct Inner<T, E> {
     b: Arc<Barrier>,
 }
 
-/// A bundle of test automata, ready to be run.
+/// A bundle of prepared test data, ready to be run.
 pub struct Bundle<T, E> {
     /// The test manifest.
     pub manifest: manifest::Manifest,
 
-    pub handles: Vec<Ready<T, E>>,
+    pub handles: ReadySet<T, E>,
+}
+
+/// A set of test FSAs, ready to be sent to threads and run.
+///
+/// `ReadySet`s may be `clone`d; one reason you may want to do this is to run
+/// instances of a test across multiple thread constructions.
+#[derive(Clone)]
+pub struct ReadySet<T, E> {
+    vec: Vec<Inner<T, E>>,
+}
+
+impl<T, E> ReadySet<T, E> {
+    /// The number of FSAs in this set.
+    pub fn len(&self) -> usize {
+        self.vec.len()
+    }
+}
+
+/// We can consume a ReadySet into an iterator over Ready FSA handles.
+impl<T, E> IntoIterator for ReadySet<T, E> {
+    type Item = Ready<T, E>;
+
+    type IntoIter = SetIter<T, E>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        SetIter(self.vec.into_iter().map(Ready))
+    }
+}
+
+/// Type alias of taking `Ready` as a function.
+type Readier<T, E> = fn(Inner<T, E>) -> Ready<T, E>;
+
+/// Iterator produced by iterating on `ReadySet`s.
+pub struct SetIter<T, E>(
+    // This mainly just exists so that we don't leak `Inner`, which we would
+    // do if we set this to a type alias.
+    std::iter::Map<std::vec::IntoIter<Inner<T, E>>, Readier<T, E>>,
+);
+
+impl<T, E> Iterator for SetIter<T, E> {
+    type Item = Ready<T, E>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
 }
 
 pub fn build<T: test::Entry>(entry: T) -> err::Result<Bundle<T, T::Env>> {
@@ -102,12 +147,14 @@ pub fn build<T: test::Entry>(entry: T) -> err::Result<Bundle<T, T::Env>> {
         entry,
     };
 
-    let mut handles = Vec::with_capacity(manifest.n_threads);
+    let mut handles = ReadySet {
+        vec: Vec::with_capacity(manifest.n_threads),
+    };
     for tid in 0..manifest.n_threads - 1 {
         let mut tc = inner.clone();
         tc.tid = tid;
-        handles.push(Ready(tc));
+        handles.vec.push(tc);
     }
-    handles.push(Ready(inner));
+    handles.vec.push(inner);
     Ok(Bundle { manifest, handles })
 }
