@@ -21,8 +21,12 @@ pub struct Checker<'a> {
 impl<'a> obs::Checker for Checker<'a> {
     type Env = env::Env;
 
-    fn check(&self, e: &Self::Env) -> bool {
-        unsafe { (self.sym)(e.p) }
+    fn check(&self, e: &Self::Env) -> obs::CheckResult {
+        if unsafe { (self.sym)(e.p) } {
+            obs::CheckResult::Passed
+        } else {
+            obs::CheckResult::Failed
+        }
     }
 }
 

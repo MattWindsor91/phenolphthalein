@@ -10,6 +10,7 @@ mod err;
 mod fsa;
 mod manifest;
 mod obs;
+mod run;
 mod test;
 
 use crossbeam::thread;
@@ -17,40 +18,7 @@ use fsa::Fsa;
 use std::sync::{Arc, Mutex};
 use test::Test;
 
-struct Thread<C> {
-    checker: C,
-    observer: Arc<Mutex<obs::Observer>>,
-}
 
-impl<C: obs::Checker> Thread<C> {
-    fn run<T>(&self, t: fsa::Runnable<T, C::Env>) -> fsa::Done
-    where
-        T: test::Entry<Env = C::Env>,
-    {
-        let mut t = t;
-        loop {
-            match t.run() {
-                fsa::RunOutcome::Done(d) => return d,
-                fsa::RunOutcome::Wait(w) => t = w.wait(),
-                fsa::RunOutcome::Observe(mut o) => {
-                    let (iter, _) = self.observe_and_reset(o.env());
-                    let r = if 100 <= iter {
-                        o.kill()
-                    } else {
-                        o.relinquish()
-                    };
-                    t = r.wait()
-                }
-            }
-        }
-    }
-
-    fn observe_and_reset(&self, env: &mut C::Env) -> (usize, obs::Info) {
-        // TODO(@MattWindsor91): handle poisoning here
-        let mut g = self.observer.lock().unwrap();
-        g.observe_and_reset(env, &self.checker)
-    }
-}
 
 fn main() {
     run().unwrap();
@@ -66,15 +34,19 @@ fn run_with_entry<T: test::Entry>(entry: T) -> err::Result<()> {
 
     let fsa::Bundle { automata, manifest } = fsa::Bundle::new(entry)?;
     let observer = obs::Observer::new(manifest);
-    let mob = Arc::new(Mutex::new(observer));
+    let shin = run::SharedState{
+        conds: run::ExitCondition::ExitOnNIterations(1000),
+        observer,
+        checker
+    };
+    let shared = Arc::new(Mutex::new(shin));
 
     thread::scope(|s| {
         automata.run(
             |r: fsa::Ready<T, T::Env>| {
                 let builder = s.builder().name(format!("P{0}", r.tid()));
-                let thrd = Thread::<T::Checker> {
-                    checker: checker.clone(),
-                    observer: mob.clone(),
+                let thrd = run::Thread::<T::Checker> {
+                    shared: shared.clone(),
                 };
                 builder.spawn(move |_| thrd.run(r.start())).unwrap()
             },
@@ -86,13 +58,16 @@ fn run_with_entry<T: test::Entry>(entry: T) -> err::Result<()> {
     })
     .unwrap()?;
 
-    if let Ok(m) = Arc::try_unwrap(mob) {
-        for (k, v) in m.into_inner().unwrap().obs {
+    if let Ok(s) = Arc::try_unwrap(shared) {
+        for (k, v) in s.into_inner().unwrap().observer.obs {
             println!(
                 "{1} {2}> {0:?}",
                 k,
                 v.occurs,
-                if v.check_result { "*" } else { ":" }
+                match v.check_result {
+                    obs::CheckResult::Passed => "*",
+                    obs::CheckResult::Failed => ":",
+                }
             );
         }
         // nb: this needs to percolate into an error if it fails.

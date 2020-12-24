@@ -15,7 +15,17 @@ pub trait Checker: Sync + Send + Clone {
     // The type of the environment this checker checks.
     type Env: env::Env;
 
-    fn check(&self, env: &Self::Env) -> bool;
+    /// Checks the current state of the environment.
+    fn check(&self, env: &Self::Env) -> CheckResult;
+}
+
+/// The result of running a checker.
+#[derive(Copy, Clone)]
+pub enum CheckResult {
+    /// The observation passed its check.
+    Passed,
+    /// The observation failed its check.
+    Failed,
 }
 
 pub struct Observer {
@@ -34,7 +44,7 @@ pub struct Info {
     /// The number of times this observation has occurred.
     pub occurs: usize,
     /// The result of asking the test to check this observation.
-    pub check_result: bool,
+    pub check_result: CheckResult,
 }
 
 impl Info {
@@ -62,11 +72,11 @@ impl Observer {
         &mut self,
         env: &mut T,
         checker: &C,
-    ) -> (usize, Info) {
+    ) -> Summary {
         let info = self.observe(env, checker);
         self.reset(env);
         self.iterations += 1;
-        (self.iterations, info)
+        Summary {iterations: self.iterations, info}
     }
 
     fn observe<T, C>(&mut self, env: &mut T, checker: &C) -> Info
@@ -126,4 +136,15 @@ impl Observer {
             env.set_int(i, r.initial_value.unwrap_or(0))
         }
     }
+}
+
+/// A summary of the observer's current state, useful for calculating test
+/// exit conditions.
+pub struct Summary {
+    /// The number of iterations the observer has seen so far, including
+    /// this one.
+    pub iterations: usize,
+
+    /// The information from the current observation.
+    pub info: Info
 }
