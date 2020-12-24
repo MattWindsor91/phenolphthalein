@@ -1,3 +1,4 @@
+use crossbeam::atomic::AtomicCell;
 use super::{env::Env, err, manifest, test};
 use std::sync::{Arc, Barrier};
 
@@ -51,6 +52,10 @@ impl<T, E> Fsa for Runnable<T, E> {
 impl<T: test::Entry> Runnable<T, T::Env> {
     /// Runs another iteration of this FSA's thread body.
     pub fn run(mut self) -> RunOutcome<T, T::Env> {
+        if self.0.dead.load() {
+            return RunOutcome::Done(Done {tid: self.0.tid})
+        }
+
         self.0.entry.run(self.0.tid, &mut self.0.env);
         let bwr = self.0.b.wait();
         if bwr.is_leader() {
@@ -59,17 +64,11 @@ impl<T: test::Entry> Runnable<T, T::Env> {
             RunOutcome::Wait(Waiting(self.0))
         }
     }
-
-    /// Signals that a test runner is finished running this FSA's thread.
-    pub fn end(self) -> Done {
-        /* TODO(@MattWindsor91): should go through the motions of waiting on
-           the barriers until some 'all threads are done' signal.
-        */
-        Done { tid: self.0.tid }
-    }
 }
 
 pub enum RunOutcome<T, E> {
+    /// The test has finished.
+    Done(Done),
     /// This thread should wait until it can run again.
     Wait(Waiting<T, E>),
     /// This thread should read the current state, then wait until it can run again.
@@ -112,6 +111,15 @@ impl<T, E> Observable<T, E> {
     pub fn relinquish(self) -> Waiting<T, E> {
         Waiting(self.0)
     }
+
+    /// Relinquishes the ability to observe the environment, marks the test as
+    /// dead, and returns to a waiting state.
+    pub fn kill(self) -> Waiting<T, E> {
+        /* TODO(@MattWindsor91): maybe return Done here, and mock up waiting
+           on the final barrier, or return Waiting<Done> somehow. */
+        self.0.dead.store(true);
+        self.relinquish()
+    }
 }
 
 /// A test state that represents the end of a test.
@@ -132,6 +140,7 @@ struct Inner<T, E> {
     env: E,
     entry: T,
     b: Arc<Barrier>,
+    dead: Arc<AtomicCell<bool>>,
 }
 
 /// A bundle of prepared test data, ready to be run.
@@ -218,6 +227,7 @@ pub fn build<T: test::Entry>(entry: T) -> err::Result<Bundle<T, T::Env>> {
         env,
         b,
         entry,
+        dead: Arc::new(AtomicCell::new(false))
     };
 
     let mut handles = ReadySet {

@@ -28,22 +28,27 @@ impl<C: obs::Checker> Thread<C> {
         T: test::Entry<Env = C::Env>,
     {
         let mut t = t;
-        for _i in 0..=100 {
+        loop {
             match t.run() {
+                fsa::RunOutcome::Done(d) => return d,
                 fsa::RunOutcome::Wait(w) => t = w.wait(),
                 fsa::RunOutcome::Observe(mut o) => {
-                    self.observe_and_reset(o.env());
-                    t = o.relinquish().wait()
+                    let (iter, _) = self.observe_and_reset(o.env());
+                    let r = if 100 <= iter {
+                        o.kill()
+                    } else {
+                        o.relinquish()
+                    };
+                    t = r.wait()
                 }
             }
         }
-        t.end()
     }
 
-    fn observe_and_reset(&self, env: &mut C::Env) {
+    fn observe_and_reset(&self, env: &mut C::Env) -> (usize, obs::Info) {
         // TODO(@MattWindsor91): handle poisoning here
         let mut g = self.observer.lock().unwrap();
-        g.observe_and_reset(env, &self.checker);
+        g.observe_and_reset(env, &self.checker)
     }
 }
 

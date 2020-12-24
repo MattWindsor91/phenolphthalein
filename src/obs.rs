@@ -23,9 +23,13 @@ pub struct Observer {
 
     /// The observations that this observer has made so far.
     pub obs: HashMap<Obs, Info>,
+
+    /// The number of iterations this observer has seen so far.
+    iterations: usize,
 }
 
 /// Information about an observation.
+#[derive(Copy, Clone)]
 pub struct Info {
     /// The number of times this observation has occurred.
     pub occurs: usize,
@@ -49,6 +53,7 @@ impl Observer {
         Observer {
             manifest,
             obs: HashMap::new(),
+            iterations: 0
         }
     }
 
@@ -57,18 +62,20 @@ impl Observer {
         &mut self,
         env: &mut T,
         checker: &C,
-    ) {
-        self.observe(env, checker);
-        self.reset(env)
+    ) -> (usize, Info) {
+        let info = self.observe(env, checker);
+        self.reset(env);
+        self.iterations += 1;
+        (self.iterations, info)
     }
 
-    fn observe<T, C>(&mut self, env: &mut T, checker: &C)
+    fn observe<T, C>(&mut self, env: &mut T, checker: &C) -> Info
     where
         T: env::Env,
         C: Checker<Env = T>,
     {
         let state = self.current_state(env);
-        let inc = self.obs.get(&state).map_or_else(
+        let info = self.obs.get(&state).map_or_else(
             || {
                 let check_result = checker.check(env);
                 Info {
@@ -78,7 +85,8 @@ impl Observer {
             },
             Info::inc,
         );
-        self.obs.insert(state, inc);
+        self.obs.insert(state, info);
+        info
     }
 
     /// Gets the current state of the environment.
