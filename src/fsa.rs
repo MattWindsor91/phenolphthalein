@@ -142,6 +142,10 @@ struct Inner<T, E> {
     env: E,
     entry: T,
     b: Arc<Barrier>,
+
+    /// Atomic flag set high when an observer thread has decided the test should
+    /// be stopped; once set, all threads will stop the test the next time they
+    /// try to run it.
     dead: Arc<AtomicCell<bool>>,
 }
 

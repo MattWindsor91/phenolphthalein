@@ -1,9 +1,12 @@
 //! The high-level test runner.
-
-use crate::{env, fsa, manifest, obs, test};
+//!
+use crate::{env, err, fsa, manifest, obs, test};
+use crossbeam::thread;
+use fsa::Fsa;
 use std::sync::{Arc, Mutex};
 
 /// An exit condition for a test run.
+#[derive(Copy, Clone)]
 pub enum ExitCondition {
     /// The test should exit when the iteration count reaches this number.
     ExitOnNIterations(usize),
@@ -21,7 +24,7 @@ impl ExitCondition {
 
 /// A single thread controller for a test run.
 pub struct Thread<C> {
-    pub shared: Arc<Mutex<SharedState<C>>>,
+    shared: Arc<Mutex<SharedState<C>>>,
 }
 
 impl<C: obs::Checker> Thread<C> {
@@ -34,17 +37,19 @@ impl<C: obs::Checker> Thread<C> {
             match t.run() {
                 fsa::RunOutcome::Done(d) => return d,
                 fsa::RunOutcome::Wait(w) => t = w.wait(),
-                fsa::RunOutcome::Observe(mut o) => {
-                    let should_exit = self.handle_env(o.env());
-                    let r = if should_exit {
-                        o.kill()
-                    } else {
-                        o.relinquish()
-                    };
-                    t = r.wait()
-                }
+                fsa::RunOutcome::Observe(o) => t = self.observe(o),
             }
         }
+    }
+
+    fn observe<T>(&self, mut o: fsa::Observable<T, C::Env>) -> fsa::Runnable<T, C::Env> {
+        let should_exit = self.handle_env(o.env());
+        let r = if should_exit {
+            o.kill()
+        } else {
+            o.relinquish()
+        };
+        r.wait()
     }
 
     fn handle_env(&self, env: &mut C::Env) -> bool {
@@ -56,15 +61,15 @@ impl<C: obs::Checker> Thread<C> {
 
 /// The shared state available to runner threads whenever they get promoted to
 /// observers.
-pub struct SharedState<C> {
+struct SharedState<C> {
     /// The state checker for the test.
-    pub checker: C,
+    checker: C,
     /// The exit condition for the test.
-    pub conds: ExitCondition,
+    conds: ExitCondition,
     /// The observer for the test.
-    pub observer: obs::Observer,
+    observer: obs::Observer,
     /// The manifest for the test.
-    pub manifest: manifest::Manifest,
+    manifest: manifest::Manifest,
 }
 
 impl<C: obs::Checker> SharedState<C> {
@@ -77,5 +82,47 @@ impl<C: obs::Checker> SharedState<C> {
         let summary = self.observer.observe(&mut m, &self.checker);
         m.reset();
         self.conds.should_exit(&summary)
+    }
+}
+
+pub struct Runner {
+    /// The exit conditions that should be applied to tests run by this runner.
+    pub conds: ExitCondition,
+}
+
+impl Runner {
+    pub fn run<T: test::Entry>(&self, entry: T) -> err::Result<obs::Observer> {
+        let checker = entry.checker();
+
+        let fsa::Bundle { automata, manifest } = fsa::Bundle::new(entry)?;
+        let observer = obs::Observer::new();
+        let shin = SharedState {
+            conds: self.conds,
+            observer,
+            checker,
+            manifest,
+        };
+        let shared = Arc::new(Mutex::new(shin));
+
+        thread::scope(|s| {
+            automata.run(
+                |r: fsa::Ready<T, T::Env>| {
+                    let builder = s.builder().name(format!("P{0}", r.tid()));
+                    let thrd = Thread::<T::Checker> {
+                        shared: shared.clone(),
+                    };
+                    builder.spawn(move |_| thrd.run(r.start())).unwrap()
+                },
+                |h| {
+                    let x = h.join().unwrap();
+                    Ok(x)
+                },
+            )
+        })
+        .unwrap()?;
+
+        Arc::try_unwrap(shared)
+            .map_err(|_| err::Error::LockReleaseFailed)
+            .and_then(move |s| Ok(s.into_inner()?.observer))
     }
 }
