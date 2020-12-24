@@ -8,7 +8,7 @@ pub struct Ready<T, E>(Inner<T, E>);
 ///
 /// Of course, the entire point of concurrency testing is to find concurrency
 /// bugs, and these can often manifest as a violation of the sorts of rules
-/// that implementing Send is supposed to serve as a guarantee of.
+/// that implementing Send is supposed to guarantee.
 ///
 /// The main rationale for this being 'mostly ok' to send across thread
 /// boundaries is that the test wrappers constrain the operations we can perform
