@@ -13,6 +13,7 @@ mod obs;
 mod test;
 
 use crossbeam::thread;
+use fsa::Fsa;
 use std::sync::{Arc, Mutex};
 use test::Test;
 
@@ -22,7 +23,7 @@ struct Thread<C> {
 }
 
 impl<C: obs::Checker> Thread<C> {
-    fn run<T>(&self, t: fsa::Runnable<T, C::Env>)
+    fn run<T>(&self, t: fsa::Runnable<T, C::Env>) -> fsa::Done
     where
         T: test::Entry<Env = C::Env>,
     {
@@ -36,6 +37,7 @@ impl<C: obs::Checker> Thread<C> {
                 }
             }
         }
+        t.end()
     }
 
     fn observe_and_reset(&self, env: &mut C::Env) {
@@ -62,25 +64,22 @@ fn run_with_entry<T: test::Entry>(entry: T) -> err::Result<()> {
     let mob = Arc::new(Mutex::new(observer));
 
     thread::scope(|s| {
-        let mut joins: Vec<thread::ScopedJoinHandle<()>> = Vec::with_capacity(handles.len());
-
-        for (i, t) in handles.into_iter().enumerate() {
-            let builder = s.builder().name(format!("P{0}", i));
-            let thrd = Thread::<T::Checker> {
-                checker: checker.clone(),
-                observer: mob.clone(),
-            };
-            let h = builder.spawn(move |_| thrd.run(t.start())).unwrap();
-            joins.push(h)
-        }
-
-        // TODO(@MattWindsor91): the observations should only be visible from the environment once we've joined these threads
-        // in general, all of the thread-unsafe stuff should be hidden inside the environment
-        for h in joins.into_iter() {
-            h.join().unwrap();
-        }
+        handles.run(
+            |r: fsa::Ready<T, T::Env>| {
+                let builder = s.builder().name(format!("P{0}", r.tid()));
+                let thrd = Thread::<T::Checker> {
+                    checker: checker.clone(),
+                    observer: mob.clone(),
+                };
+                builder.spawn(move |_| thrd.run(r.start())).unwrap()
+            },
+            |h| {
+                let x = h.join().unwrap();
+                Ok(x)
+            },
+        )
     })
-    .unwrap();
+    .unwrap()?;
 
     if let Ok(m) = Arc::try_unwrap(mob) {
         for (k, v) in m.into_inner().unwrap().obs {

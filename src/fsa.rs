@@ -1,8 +1,21 @@
 use super::{env::Env, err, manifest, test};
 use std::sync::{Arc, Barrier};
 
+/// Common functionality for states in the testing finite automaton.
+pub trait Fsa {
+    /// Gets the ID of the test thread to which this automaton state belongs.
+    fn tid(&self) -> usize;
+}
+
 /// A test handle that is ready to send to its thread.
 pub struct Ready<T, E>(Inner<T, E>);
+
+impl<T, E> Ready<T, E> {
+    /// Consumes this `Ready` and produces a `Runnable`.
+    pub fn start(self) -> Runnable<T, E> {
+        Runnable(self.0)
+    }
+}
 
 /// We can 'safely' send ReadyTests across thread boundaries.
 ///
@@ -20,16 +33,23 @@ unsafe impl<T, E> Send for Ready<T, E> {}
 /// See the Sync implementation for the handwave.
 unsafe impl<T, E> Sync for Ready<T, E> {}
 
-impl<T, E> Ready<T, E> {
-    pub fn start(self) -> Runnable<T, E> {
-        Runnable(self.0)
+impl<T, E> Fsa for Ready<T, E> {
+    fn tid(&self) -> usize {
+        self.0.tid
     }
 }
 
 /// A test handle that is in the runnable position.
 pub struct Runnable<T, E>(Inner<T, E>);
 
+impl<T, E> Fsa for Runnable<T, E> {
+    fn tid(&self) -> usize {
+        self.0.tid
+    }
+}
+
 impl<T: test::Entry> Runnable<T, T::Env> {
+    /// Runs another iteration of this FSA's thread body.
     pub fn run(mut self) -> RunOutcome<T, T::Env> {
         self.0.entry.run(self.0.tid, &mut self.0.env);
         let bwr = self.0.b.wait();
@@ -39,10 +59,31 @@ impl<T: test::Entry> Runnable<T, T::Env> {
             RunOutcome::Wait(Waiting(self.0))
         }
     }
+
+    /// Signals that a test runner is finished running this FSA's thread.
+    pub fn end(self) -> Done {
+        /* TODO(@MattWindsor91): should go through the motions of waiting on
+           the barriers until some 'all threads are done' signal.
+        */
+        Done { tid: self.0.tid }
+    }
+}
+
+pub enum RunOutcome<T, E> {
+    /// This thread should wait until it can run again.
+    Wait(Waiting<T, E>),
+    /// This thread should read the current state, then wait until it can run again.
+    Observe(Observable<T, E>),
 }
 
 /// A test handle that is in the waiting position.
 pub struct Waiting<T, E>(Inner<T, E>);
+
+impl<T, E> Fsa for Waiting<T, E> {
+    fn tid(&self) -> usize {
+        self.0.tid
+    }
+}
 
 impl<T, E> Waiting<T, E> {
     pub fn wait(self) -> Runnable<T, E> {
@@ -54,11 +95,10 @@ impl<T, E> Waiting<T, E> {
 /// A test handle that is in the observable position.
 pub struct Observable<T, E>(Inner<T, E>);
 
-pub enum RunOutcome<T, E> {
-    /// This thread should wait until it can run again.
-    Wait(Waiting<T, E>),
-    /// This thread should read the current state, then wait until it can run again.
-    Observe(Observable<T, E>),
+impl<T, E> Fsa for Observable<T, E> {
+    fn tid(&self) -> usize {
+        self.0.tid
+    }
 }
 
 impl<T, E> Observable<T, E> {
@@ -71,6 +111,17 @@ impl<T, E> Observable<T, E> {
     /// waiting state.
     pub fn relinquish(self) -> Waiting<T, E> {
         Waiting(self.0)
+    }
+}
+
+/// A test state that represents the end of a test.
+pub struct Done {
+    tid: usize,
+}
+
+impl Fsa for Done {
+    fn tid(&self) -> usize {
+        self.tid
     }
 }
 
@@ -93,17 +144,39 @@ pub struct Bundle<T, E> {
 
 /// A set of test FSAs, ready to be sent to threads and run.
 ///
-/// `ReadySet`s may be `clone`d; one reason you may want to do this is to run
-/// instances of a test across multiple thread constructions.
-#[derive(Clone)]
+/// We can always decompose a `ReadySet` into a single set of use-once FSAs,
+/// but it is unsafe to clone the set whenever the existing set is being used,
+/// and so we only provide specific support for reconstituting `ReadySet`s at
+/// the end of particular patterns of use.
 pub struct ReadySet<T, E> {
     vec: Vec<Inner<T, E>>,
 }
 
-impl<T, E> ReadySet<T, E> {
-    /// The number of FSAs in this set.
-    pub fn len(&self) -> usize {
-        self.vec.len()
+impl<T: Clone, E: Clone> ReadySet<T, E> {
+    /// Spawns a series of threadlike objects using the FSAs in this set,
+    /// joins on each to retrieve evidence that the FSA is done, and returns
+    /// a copy of this `ReadySet`.
+    ///
+    /// This method exists to allow situations where we want to re-run the FSAs
+    /// of a test on multiple thread configurations, and attempts to prevent
+    /// unsafe parallel usage of more FSAs at once than the test was built to
+    /// handle.
+    pub fn run<H>(
+        self,
+        spawn: impl Fn(Ready<T, E>) -> H,
+        join: fn(H) -> err::Result<Done>,
+    ) -> err::Result<Self> {
+        let vec = self.vec.clone();
+
+        // Collecting to force all handles to be produced before we join any
+        let handles = self.into_iter().map(spawn).collect::<Vec<H>>();
+
+        // TODO(@MattWindsor91): the observations should only be visible from the environment once we've joined these threads
+        // in general, all of the thread-unsafe stuff should be hidden inside the environment
+        for h in handles {
+            join(h)?;
+        }
+        Ok(ReadySet { vec })
     }
 }
 
