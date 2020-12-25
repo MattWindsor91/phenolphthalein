@@ -1,8 +1,10 @@
 //! The main testing finite state automaton, and helper functions for it.
 
 use super::{env::Env, err, manifest, test};
-use crossbeam::atomic::AtomicCell;
-use std::sync::{Arc, Barrier};
+use std::sync::{
+    atomic::{AtomicU8, Ordering},
+    Arc, Barrier,
+};
 
 /// Common functionality for states in the testing finite automaton.
 pub trait Fsa {
@@ -54,8 +56,11 @@ impl<T, E> Fsa for Runnable<T, E> {
 impl<T: test::Entry> Runnable<T, T::Env> {
     /// Runs another iteration of this FSA's thread body.
     pub fn run(mut self) -> RunOutcome<T, T::Env> {
-        if self.0.dead.load() {
-            return RunOutcome::Done(Done { tid: self.0.tid });
+        if let Some(exit_type) = self.exit_type() {
+            return RunOutcome::Done(Done {
+                tid: self.0.tid,
+                exit_type,
+            });
         }
 
         self.0.entry.run(self.0.tid, &mut self.0.env);
@@ -65,6 +70,10 @@ impl<T: test::Entry> Runnable<T, T::Env> {
         } else {
             RunOutcome::Wait(Waiting(self.0))
         }
+    }
+
+    fn exit_type(&self) -> Option<ExitType> {
+        ExitType::from_u8(self.0.state.load(Ordering::Acquire))
     }
 }
 
@@ -116,10 +125,10 @@ impl<T, E> Observable<T, E> {
 
     /// Relinquishes the ability to observe the environment, marks the test as
     /// dead, and returns to a waiting state.
-    pub fn kill(self) -> Waiting<T, E> {
+    pub fn kill(self, state: ExitType) -> Waiting<T, E> {
         /* TODO(@MattWindsor91): maybe return Done here, and mock up waiting
         on the final barrier, or return Waiting<Done> somehow. */
-        self.0.dead.store(true);
+        self.0.state.store(state.to_u8(), Ordering::Release);
         self.relinquish()
     }
 }
@@ -127,6 +136,38 @@ impl<T, E> Observable<T, E> {
 /// A test state that represents the end of a test.
 pub struct Done {
     tid: usize,
+
+    /// The status at the end of the test.
+    pub exit_type: ExitType,
+}
+
+/// Enumeration of states the test can be left in when a FSA finishes.
+///
+/// `ExitType`s are ordered such that exiting is 'greater than' rotating.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ExitType {
+    /// The test's threads should be torn down and reset.
+    Rotate,
+    /// The test should exit.
+    Exit,
+}
+
+impl ExitType {
+    /// Packs a ExitType into a state byte.
+    const fn to_u8(self) -> u8 {
+        match self {
+            Self::Rotate => 1,
+            Self::Exit => 2,
+        }
+    }
+    /// Unpacks a ExitType from a state byte.
+    const fn from_u8(x: u8) -> Option<Self> {
+        match x {
+            1 => Some(Self::Rotate),
+            2 => Some(Self::Exit),
+            _ => None,
+        }
+    }
 }
 
 impl Fsa for Done {
@@ -143,10 +184,11 @@ struct Inner<T, E> {
     entry: T,
     b: Arc<Barrier>,
 
-    /// Atomic flag set high when an observer thread has decided the test should
-    /// be stopped; once set, all threads will stop the test the next time they
-    /// try to run it.
-    dead: Arc<AtomicCell<bool>>,
+    /// Set to rotate when an observer thread has decided the test should
+    /// rotate its threads, and exit when it decides the test should
+    /// be stopped; once set to either, all threads will stop the test the next
+    /// time they try to run the test.
+    state: Arc<AtomicU8>,
 }
 
 /// A bundle of prepared test data, ready to be run.
@@ -190,7 +232,7 @@ impl<T: Clone, E: Clone> Set<T, E> {
         self,
         spawn: impl Fn(Ready<T, E>) -> H,
         join: fn(H) -> err::Result<Done>,
-    ) -> err::Result<Self> {
+    ) -> err::Result<(ExitType, Self)> {
         let vec = self.vec.clone();
 
         // Collecting to force all handles to be produced before we join any
@@ -198,10 +240,13 @@ impl<T: Clone, E: Clone> Set<T, E> {
 
         // TODO(@MattWindsor91): the observations should only be visible from the environment once we've joined these threads
         // in general, all of the thread-unsafe stuff should be hidden inside the environment
+        let mut et = ExitType::Exit;
         for h in handles {
-            join(h)?;
+            let done = join(h)?;
+            // These'll be the same, so it doesn't matter which we grab.
+            et = done.exit_type;
         }
-        Ok(Set { vec })
+        Ok((et, Set { vec }))
     }
 }
 
@@ -218,7 +263,7 @@ impl<T: test::Entry> Set<T, T::Env> {
             env,
             b,
             entry,
-            dead: Arc::new(AtomicCell::new(false)),
+            state: Arc::new(AtomicU8::new(0)),
         };
         let mut automata = Set {
             vec: Vec::with_capacity(manifest.n_threads),

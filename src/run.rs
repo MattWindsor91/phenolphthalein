@@ -5,19 +5,28 @@ use crossbeam::thread;
 use fsa::Fsa;
 use std::sync::{Arc, Mutex};
 
-/// An exit condition for a test run.
+/// An control flow condition for a test run.
 #[derive(Copy, Clone)]
-pub enum ExitCondition {
-    /// The test should exit when the iteration count reaches this number.
-    ExitOnNIterations(usize),
+pub enum Condition {
+    /// The test should rotate or exit when the iteration count reaches this
+    /// a multiple of this number.
+    EveryNIterations(usize, fsa::ExitType),
 }
 
-impl ExitCondition {
-    /// Gets whether this exit condition implies the test should exit given the
-    /// observation os.
-    pub fn should_exit(&self, os: &obs::Summary) -> bool {
+fn exit_if(p: bool, ty: fsa::ExitType) -> Option<fsa::ExitType> {
+    if p {
+        Some(ty)
+    } else {
+        None
+    }
+}
+
+impl Condition {
+    /// Gets the sort of exit, if any, that should occur given this condition
+    /// and the most recent observation os.
+    pub fn exit_type(&self, os: &obs::Summary) -> Option<fsa::ExitType> {
         match self {
-            Self::ExitOnNIterations(n) => *n <= os.iterations,
+            Self::EveryNIterations(n, et) => exit_if(os.iterations % *n == 0, *et),
         }
     }
 }
@@ -43,16 +52,15 @@ impl<C: obs::Checker> Thread<C> {
     }
 
     fn observe<T>(&self, mut o: fsa::Observable<T, C::Env>) -> fsa::Runnable<T, C::Env> {
-        let should_exit = self.handle_env(o.env());
-        let r = if should_exit {
-            o.kill()
+        if let Some(exit_type) = self.handle_env(o.env()) {
+            o.kill(exit_type)
         } else {
             o.relinquish()
-        };
-        r.wait()
+        }
+        .wait()
     }
 
-    fn handle_env(&self, env: &mut C::Env) -> bool {
+    fn handle_env(&self, env: &mut C::Env) -> Option<fsa::ExitType> {
         // TODO(@MattWindsor91): handle poisoning here
         let mut s = self.shared.lock().unwrap();
         s.handle(env)
@@ -65,7 +73,7 @@ struct SharedState<C> {
     /// The state checker for the test.
     checker: C,
     /// The exit condition for the test.
-    conds: ExitCondition,
+    conds: Vec<Condition>,
     /// The observer for the test.
     observer: obs::Observer,
     /// The manifest for the test.
@@ -74,36 +82,65 @@ struct SharedState<C> {
 
 impl<C: obs::Checker> SharedState<C> {
     /// Handles the environment, including observing it and resetting it.
-    fn handle(&mut self, env: &mut C::Env) -> bool {
+    fn handle(&mut self, env: &mut C::Env) -> Option<fsa::ExitType> {
         let mut m = env::Manifested {
             manifest: &self.manifest,
             env,
         };
         let summary = self.observer.observe(&mut m, &self.checker);
         m.reset();
-        self.conds.should_exit(&summary)
+        self.exit_type(summary)
+    }
+
+    /// Checks whether the test should exit now.
+    fn exit_type(&self, summary: obs::Summary) -> Option<fsa::ExitType> {
+        self.conds
+            .iter()
+            .filter_map(|c| c.exit_type(&summary))
+            .max()
     }
 }
 
 pub struct Runner {
     /// The exit conditions that should be applied to tests run by this runner.
-    pub conds: ExitCondition,
+    pub conds: Vec<Condition>,
 }
 
 impl Runner {
     pub fn run<T: test::Entry>(&self, entry: T) -> err::Result<obs::Observer> {
         let checker = entry.checker();
 
-        let fsa::Bundle { automata, manifest } = fsa::Bundle::new(entry)?;
+        let fsa::Bundle {
+            mut automata,
+            manifest,
+        } = fsa::Bundle::new(entry)?;
         let observer = obs::Observer::new();
         let shin = SharedState {
-            conds: self.conds,
+            conds: self.conds.clone(),
             observer,
             checker,
             manifest,
         };
         let shared = Arc::new(Mutex::new(shin));
 
+        loop {
+            let (etype, am) = self.run_rotation(shared.clone(), automata)?;
+            if etype == fsa::ExitType::Exit {
+                break;
+            }
+            automata = am;
+        }
+
+        Arc::try_unwrap(shared)
+            .map_err(|_| err::Error::LockReleaseFailed)
+            .and_then(move |s| Ok(s.into_inner()?.observer))
+    }
+
+    fn run_rotation<T: test::Entry>(
+        &self,
+        shared: Arc<Mutex<SharedState<T::Checker>>>,
+        automata: fsa::Set<T, T::Env>,
+    ) -> err::Result<(fsa::ExitType, fsa::Set<T, T::Env>)> {
         thread::scope(|s| {
             automata.run(
                 |r: fsa::Ready<T, T::Env>| {
@@ -119,10 +156,6 @@ impl Runner {
                 },
             )
         })
-        .unwrap()?;
-
-        Arc::try_unwrap(shared)
-            .map_err(|_| err::Error::LockReleaseFailed)
-            .and_then(move |s| Ok(s.into_inner()?.observer))
+        .unwrap()
     }
 }

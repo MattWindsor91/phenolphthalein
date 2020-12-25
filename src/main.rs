@@ -30,6 +30,15 @@ fn main() {
                 .long("--iterations")
                 .value_name("NUM")
                 .takes_value(true)
+                .default_value("100000"),
+        )
+        .arg(
+            Arg::with_name("period")
+                .help("rotate threads after each NUM iterations")
+                .short("-p")
+                .long("--period")
+                .value_name("NUM")
+                .takes_value(true)
                 .default_value("10000"),
         )
         .arg(
@@ -49,13 +58,31 @@ fn run(matches: clap::ArgMatches) -> Result<()> {
 
 fn run_with_args(args: Args) -> Result<()> {
     let test = c::Test::load(args.input)?;
-    let runner = run::Runner {
-        conds: run::ExitCondition::ExitOnNIterations(args.iterations),
-    };
+
+    let conds = build_conds(args);
+
+    let runner = run::Runner { conds };
     let obs = runner.run(test.spawn())?;
     print_obs(obs);
 
     Ok(())
+}
+
+fn build_conds(args: Args) -> Vec<run::Condition> {
+    let mut v = Vec::with_capacity(2);
+    if args.iterations != 0 {
+        v.push(run::Condition::EveryNIterations(
+            args.iterations,
+            fsa::ExitType::Exit,
+        ))
+    }
+    if args.period != 0 {
+        v.push(run::Condition::EveryNIterations(
+            args.period,
+            fsa::ExitType::Rotate,
+        ))
+    }
+    v
 }
 
 fn print_obs(observer: obs::Observer) {
@@ -75,6 +102,7 @@ fn print_obs(observer: obs::Observer) {
 struct Args<'a> {
     input: &'a str,
     iterations: usize,
+    period: usize,
 }
 
 impl<'a> Args<'a> {
@@ -83,8 +111,13 @@ impl<'a> Args<'a> {
         // For now
         let nstr = matches.value_of("iterations").unwrap();
         let iterations = nstr.parse().map_err(Error::BadIterationCount)?;
+        let period = nstr.parse().map_err(Error::BadParseCount)?;
 
-        Ok(Self { input, iterations })
+        Ok(Self {
+            input,
+            iterations,
+            period,
+        })
     }
 }
 
@@ -92,6 +125,8 @@ impl<'a> Args<'a> {
 enum Error {
     /// The user supplied a bad iteration count.
     BadIterationCount(std::num::ParseIntError),
+    /// The user supplied a bad parse count.
+    BadParseCount(std::num::ParseIntError),
     /// Error running the test.
     RunningTest(err::Error),
 }
