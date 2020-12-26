@@ -104,6 +104,9 @@ impl<C: obs::Checker> SharedState<C> {
 pub struct Runner {
     /// The exit conditions that should be applied to tests run by this runner.
     pub conds: Vec<Condition>,
+
+    /// The factory function to use to construct synchronisation.
+    pub sync: fsa::sync::Factory,
 }
 
 impl Runner {
@@ -113,7 +116,7 @@ impl Runner {
         let fsa::Bundle {
             mut automata,
             manifest,
-        } = fsa::Bundle::new(entry)?;
+        } = fsa::Bundle::new(entry, self.sync)?;
         let observer = obs::Observer::new();
         let shin = SharedState {
             conds: self.conds.clone(),

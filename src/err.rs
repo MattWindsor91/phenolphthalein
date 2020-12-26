@@ -3,6 +3,11 @@
 pub enum Error {
     EnvAllocFailed,
     NotEnoughThreads,
+
+    /// Error returned when we try to construct a `Spinner` with more threads
+    /// than can be stored in a `ssize_t`.  (Unlikely to happen in practice.)
+    TooManyThreadsForSpinner(std::num::TryFromIntError),
+
     LockReleaseFailed,
     DlopenFailed(dlopen::Error),
     LockPoisoned,

@@ -1,9 +1,11 @@
 //! The main testing finite state automaton, and helper functions for it.
 
+pub mod sync;
+
 use super::{env::Env, err, manifest, test};
 use std::sync::{
     atomic::{AtomicU8, Ordering},
-    Arc, Barrier,
+    Arc,
 };
 
 /// Common functionality for states in the testing finite automaton.
@@ -64,8 +66,7 @@ impl<T: test::Entry> Runnable<T, T::Env> {
         }
 
         self.0.entry.run(self.0.tid, &mut self.0.env);
-        let bwr = self.0.b.wait();
-        if bwr.is_leader() {
+        if self.0.b.after_run(self.0.tid) {
             RunOutcome::Observe(Observable(self.0))
         } else {
             RunOutcome::Wait(Waiting(self.0))
@@ -97,7 +98,7 @@ impl<T, E> Fsa for Waiting<T, E> {
 
 impl<T, E> Waiting<T, E> {
     pub fn wait(self) -> Runnable<T, E> {
-        self.0.b.wait();
+        self.0.b.wait_for_obs(self.0.tid);
         Runnable(self.0)
     }
 }
@@ -182,7 +183,7 @@ struct Inner<T, E> {
     tid: usize,
     env: E,
     entry: T,
-    b: Arc<Barrier>,
+    b: Arc<dyn sync::Synchroniser>,
 
     /// Set to rotate when an observer thread has decided the test should
     /// rotate its threads, and exit when it decides the test should
@@ -202,9 +203,9 @@ pub struct Bundle<T, E> {
 
 impl<T: test::Entry> Bundle<T, T::Env> {
     /// Constructs a bundle from the given test entry.
-    pub fn new(entry: T) -> err::Result<Self> {
+    pub fn new(entry: T, sync: sync::Factory) -> err::Result<Self> {
         let manifest = entry.make_manifest()?;
-        let automata = Set::new(entry, manifest.clone())?;
+        let automata = Set::new(entry, manifest.clone(), sync)?;
         Ok(Bundle { manifest, automata })
     }
 }
@@ -255,9 +256,9 @@ impl<T: test::Entry> Set<T, T::Env> {
     ///
     /// This function isn't public because it relies on the manifest and entry
     /// point matching up.
-    fn new(entry: T, manifest: manifest::Manifest) -> err::Result<Self> {
+    fn new(entry: T, manifest: manifest::Manifest, sync: sync::Factory) -> err::Result<Self> {
         let env = T::Env::for_manifest(&manifest)?;
-        let b = Arc::new(Barrier::new(manifest.n_threads));
+        let b = sync(manifest.n_threads)?;
         let inner = Inner {
             tid: manifest.n_threads - 1,
             env,
