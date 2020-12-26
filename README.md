@@ -17,16 +17,21 @@ licenced under the MIT licence.
 
 ## How do I use this?
 
-At time of writing, everything but the test is hardcoded.  Using either
-the example test given in `main.c` or your own variant thereof, use
+Using either the example test given in `main.c` or your own variant thereof, do
 something like:
 
 ```shell
-$ clang -dynamiclib -std=c11 -pedantic -o test.dylib test.c
-$ cargo run
+$ clang -dynamiclib -std=c11 -pedantic -O3 -o test.dylib test.c
+$ cargo run --release test.dylib
 ```
 
-Future work will make the test name configurable.
+### Options
+
+- `--iterations=N`: run `N` many iterations in total;
+- `--period=N`: switch threads every `N` iterations;
+- `--sync=TYPE`: synchronise threads with a spinlock (`spinner`, default) or
+  a full Rust barrier (`barrier`); `spinner` is faster and tends to show more
+  weak behaviour, but `barrier` is perhaps 'safer'.
 
 ## Why is it called phenolphthalein?
 
