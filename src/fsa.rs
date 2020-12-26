@@ -66,7 +66,7 @@ impl<T: test::Entry> Runnable<T, T::Env> {
         }
 
         self.0.entry.run(self.0.tid, &mut self.0.env);
-        if self.0.b.after_run(self.0.tid) {
+        if self.0.b.run() {
             RunOutcome::Observe(Observable(self.0))
         } else {
             RunOutcome::Wait(Waiting(self.0))
@@ -98,7 +98,7 @@ impl<T, E> Fsa for Waiting<T, E> {
 
 impl<T, E> Waiting<T, E> {
     pub fn wait(self) -> Runnable<T, E> {
-        self.0.b.wait_for_obs(self.0.tid);
+        self.0.b.wait();
         Runnable(self.0)
     }
 }
@@ -119,14 +119,15 @@ impl<T, E> Observable<T, E> {
     }
 
     /// Relinquishes the ability to observe the environment, and returns to a
-    /// waiting state.
-    pub fn relinquish(self) -> Waiting<T, E> {
-        Waiting(self.0)
+    /// running state.
+    pub fn relinquish(self) -> Runnable<T, E> {
+        self.0.b.obs();
+        Runnable(self.0)
     }
 
     /// Relinquishes the ability to observe the environment, marks the test as
     /// dead, and returns to a waiting state.
-    pub fn kill(self, state: ExitType) -> Waiting<T, E> {
+    pub fn kill(self, state: ExitType) -> Runnable<T, E> {
         /* TODO(@MattWindsor91): maybe return Done here, and mock up waiting
         on the final barrier, or return Waiting<Done> somehow. */
         self.0.state.store(state.to_u8(), Ordering::Release);

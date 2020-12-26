@@ -11,24 +11,37 @@ use std::sync::{
 pub trait Synchroniser {
     /// Runner should call this after running;
     /// it returns whether the runner is an observer or not.
-    fn after_run(&self, tid: usize) -> bool;
+    fn run(&self) -> bool;
 
-    /// Relinquishes any observer privileges and/or waits for the observer to
-    /// finish.
-    fn wait_for_obs(&self, tid: usize);
+    /// Observer should call this after observing;
+    /// it performs any necessary synchronisation.
+    fn obs(&self);
+
+    /// Waiters should call this after observing;
+    /// it performs any necessary synchronisation.
+    fn wait(&self);
 }
 
+/// Barriers are synchronisers; each phase corresponds to a barrier wait, and
+/// observers are nominated through the barrier's own leader function.
 impl Synchroniser for Barrier {
-    fn after_run(&self, _tid: usize) -> bool {
+    fn run(&self) -> bool {
         self.wait().is_leader()
     }
 
-    fn wait_for_obs(&self, _tid: usize) {
+    fn obs(&self) {
+        self.wait();
+    }
+
+    fn wait(&self) {
         self.wait();
     }
 }
 
 /// A synchroniser based on a simple atomic counter and busy-waiting.
+///
+/// When the spinner is positive, we're waiting for runners to finish; when it's
+/// negative, we're synchronising on the observer.
 pub struct Spinner {
     nthreads: isize,
     inner: AtomicIsize,
@@ -48,7 +61,7 @@ impl Spinner {
 }
 
 impl Synchroniser for Spinner {
-    fn after_run(&self, _tid: usize) -> bool {
+    fn run(&self) -> bool {
         let count = self.inner.fetch_sub(1, Ordering::AcqRel);
         assert!(0 < count, "count negative after run (={})", count);
 
@@ -65,7 +78,11 @@ impl Synchroniser for Spinner {
         }
     }
 
-    fn wait_for_obs(&self, _tid: usize) {
+    fn obs(&self) {
+        self.wait();
+    }
+
+    fn wait(&self) {
         let count = self.inner.fetch_add(1, Ordering::AcqRel);
         assert!(count < 0, "count positive while waiting (={})", count);
 

@@ -57,7 +57,6 @@ impl<C: obs::Checker> Thread<C> {
         } else {
             o.relinquish()
         }
-        .wait()
     }
 
     fn handle_env(&self, env: &mut C::Env) -> Option<fsa::ExitType> {
