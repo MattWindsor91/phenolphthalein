@@ -79,6 +79,10 @@ impl Synchroniser for Spinner {
     }
 
     fn obs(&self) {
+        /* TODO(@MattWindsor91): I'm convinced there must be some way of
+        eliminating the synchronisation here, but I can't think of a
+        smarter algorithm; if we have obs just set nthreads high here,
+        we run the risk of an ABA problem with runners above, for instance */
         self.wait();
     }
 
