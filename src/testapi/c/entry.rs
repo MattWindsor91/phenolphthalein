@@ -1,7 +1,7 @@
 use dlopen::symbor::{Container, Ref, SymBorApi, Symbol};
 
 use super::{env, manifest};
-use crate::{err, manifest as m, obs, testapi::abs};
+use crate::{err, model, testapi::abs};
 
 /// Entry point for C-ABI tests coming from dynamically loaded libraries.
 #[derive(SymBorApi, Clone)]
@@ -18,15 +18,11 @@ pub struct Checker<'a> {
     sym: Symbol<'a, unsafe extern "C" fn(env: *const env::UnsafeEnv) -> bool>,
 }
 
-impl<'a> obs::Checker for Checker<'a> {
+impl<'a> abs::Checker for Checker<'a> {
     type Env = env::Env;
 
-    fn check(&self, e: &Self::Env) -> obs::CheckResult {
-        if unsafe { (self.sym)(e.p) } {
-            obs::CheckResult::Passed
-        } else {
-            obs::CheckResult::Failed
-        }
+    fn check(&self, e: &Self::Env) -> model::check::Outcome {
+        model::check::Outcome::from_pass_bool(unsafe { (self.sym)(e.p) })
     }
 }
 
@@ -38,7 +34,7 @@ impl<'a> abs::Entry for Entry<'a> {
         unsafe { (self.test)(tid, e.p) }
     }
 
-    fn make_manifest(&self) -> err::Result<m::Manifest> {
+    fn make_manifest(&self) -> err::Result<model::manifest::Manifest> {
         self.manifest.to_manifest()
     }
 

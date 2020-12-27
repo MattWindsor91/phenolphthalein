@@ -3,7 +3,7 @@ extern crate dlopen;
 extern crate clap;
 
 use phenolphthalein::{
-    err, obs, run,
+    err, model, obs, run,
     testapi::{abs::Test, c},
     ux,
 };
@@ -76,8 +76,8 @@ fn print_obs(observer: obs::Observer) {
             k,
             v.occurs,
             match v.check_result {
-                obs::CheckResult::Passed => "*",
-                obs::CheckResult::Failed => ":",
+                model::check::Outcome::Passed => "*",
+                model::check::Outcome::Failed => ":",
             }
         );
     }

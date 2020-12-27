@@ -2,7 +2,11 @@
 
 pub mod sync;
 
-use super::{env::Env, err, manifest, testapi::abs};
+use super::{
+    err,
+    model::manifest,
+    testapi::{abs, abs::Env},
+};
 use std::sync::{
     atomic::{AtomicU8, Ordering},
     Arc,

@@ -1,3 +1,4 @@
+//! Test manifests.
 use std::collections::BTreeMap;
 
 /// A test manifest, describing properties of a test.

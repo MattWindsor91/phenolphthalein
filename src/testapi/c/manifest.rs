@@ -1,4 +1,4 @@
-use crate::{err, manifest};
+use crate::{err, model::manifest};
 use std::{collections::BTreeMap, ffi};
 
 /// The raw manifest structure that the test implements to communicate auxiliary

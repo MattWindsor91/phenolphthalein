@@ -1,6 +1,6 @@
 //! The high-level test runner.
 //!
-use crate::{env, err, fsa, manifest, obs, testapi::abs};
+use crate::{err, fsa, model, obs, testapi::abs};
 use crossbeam::thread;
 use fsa::Fsa;
 use std::sync::{Arc, Mutex};
@@ -36,7 +36,7 @@ pub struct Thread<C> {
     shared: Arc<Mutex<SharedState<C>>>,
 }
 
-impl<C: obs::Checker> Thread<C> {
+impl<C: abs::Checker> Thread<C> {
     pub fn run<T>(&self, t: fsa::Runnable<T, C::Env>) -> fsa::Done
     where
         T: abs::Entry<Env = C::Env>,
@@ -76,13 +76,13 @@ struct SharedState<C> {
     /// The observer for the test.
     observer: obs::Observer,
     /// The manifest for the test.
-    manifest: manifest::Manifest,
+    manifest: model::manifest::Manifest,
 }
 
-impl<C: obs::Checker> SharedState<C> {
+impl<C: abs::Checker> SharedState<C> {
     /// Handles the environment, including observing it and resetting it.
     fn handle(&mut self, env: &mut C::Env) -> Option<fsa::ExitType> {
-        let mut m = env::Manifested {
+        let mut m = obs::Manifested {
             manifest: &self.manifest,
             env,
         };
