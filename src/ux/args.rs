@@ -48,7 +48,7 @@ impl<'a> Args<'a> {
 
     /// Gets the run conditions requested in this argument set.
     pub fn conds(&self) -> Vec<halt::Condition> {
-        let mut v = Vec::with_capacity(2);
+        let mut v = Vec::with_capacity(3);
         if self.iterations != 0 {
             v.push(halt::Condition::EveryNIterations(
                 self.iterations,

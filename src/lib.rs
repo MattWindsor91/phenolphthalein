@@ -2,6 +2,7 @@
 
 extern crate clap;
 extern crate crossbeam;
+extern crate ctrlc;
 extern crate dlopen;
 #[macro_use]
 extern crate dlopen_derive;

@@ -1,6 +1,12 @@
-extern crate dlopen;
 #[macro_use]
 extern crate clap;
+extern crate ctrlc;
+extern crate dlopen;
+
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use phenolphthalein::{
     err, model, run,
@@ -65,7 +71,9 @@ fn run(matches: clap::ArgMatches) -> Result<()> {
 fn run_with_args(args: ux::args::Args) -> Result<()> {
     let test = c::Test::load(args.input)?;
 
-    let conds = args.conds();
+    let mut conds = args.conds();
+    conds.push(setup_ctrlc()?);
+
     let sync = args.sync_factory();
 
     let runner = run::Runner {
@@ -80,17 +88,23 @@ fn run_with_args(args: ux::args::Args) -> Result<()> {
     Ok(())
 }
 
+fn setup_ctrlc() -> Result<run::halt::Condition> {
+    let sigb = Arc::new(AtomicBool::new(false));
+    let c = run::halt::Condition::OnSignal(sigb.clone(), run::halt::Type::Exit);
+    ctrlc::set_handler(move || sigb.store(true, Ordering::Release))?;
+    Ok(c)
+}
+
 fn print_obs(observer: run::obs::Observer) {
     for (k, v) in observer.obs {
-        println!(
-            "{1} {2}> {0:?}",
-            k,
-            v.occurs,
-            match v.check_result {
-                model::check::Outcome::Passed => "*",
-                model::check::Outcome::Failed => ":",
-            }
-        );
+        println!("{1} {2}> {0:?}", k, v.occurs, check_sigil(v.check_result));
+    }
+}
+
+fn check_sigil(r: model::check::Outcome) -> &'static str {
+    match r {
+        model::check::Outcome::Passed => "*",
+        model::check::Outcome::Failed => ":",
     }
 }
 
@@ -101,6 +115,8 @@ enum Error {
     ParsingArgs(ux::args::Error),
     /// Error running the test.
     RunningTest(err::Error),
+    /// There was a problem installing the control-C interrupt handler.
+    CtrlC(ctrlc::Error),
 }
 type Result<T> = std::result::Result<T, Error>;
 
@@ -113,5 +129,11 @@ impl From<ux::args::Error> for Error {
 impl From<err::Error> for Error {
     fn from(e: err::Error) -> Self {
         Self::RunningTest(e)
+    }
+}
+
+impl From<ctrlc::Error> for Error {
+    fn from(e: ctrlc::Error) -> Self {
+        Self::CtrlC(e)
     }
 }

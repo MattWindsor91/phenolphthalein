@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 clap = "2.33"
 crossbeam = "0.8.0"
+ctrlc = { version = "3.1", features = ["termination"] }
 dlopen = "0.1.8"
 dlopen_derive = "0.1.4"
 libc = "0.2"

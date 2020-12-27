@@ -1,13 +1,19 @@
 //! Ways to temporarily or permanently halt a running test.
 
 use super::obs;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 /// An halting condition for a test run.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub enum Condition {
     /// The test should rotate or exit when the iteration count reaches this
     /// a multiple of this number.
     EveryNIterations(usize, Type),
+    /// The test should rotate or exit when this flag goes high.
+    OnSignal(Arc<AtomicBool>, Type),
 }
 
 impl Condition {
@@ -16,6 +22,7 @@ impl Condition {
     pub fn exit_type(&self, os: &obs::Summary) -> Option<Type> {
         match self {
             Self::EveryNIterations(n, et) => exit_if(os.iterations % *n == 0, *et),
+            Self::OnSignal(s, et) => exit_if(s.load(Ordering::Acquire), *et),
         }
     }
 }
