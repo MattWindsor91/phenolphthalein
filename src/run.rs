@@ -80,22 +80,25 @@ impl<C: abs::Checker> SharedState<C> {
     }
 }
 
-pub struct Runner {
+pub struct Runner<T> {
     /// The exit conditions that should be applied to tests run by this runner.
     pub conds: Vec<halt::Condition>,
 
     /// The factory function to use to construct synchronisation.
     pub sync: sync::Factory,
+
+    /// A cloneable entry into the test.
+    pub entry: T,
 }
 
-impl Runner {
-    pub fn run<T: abs::Entry>(&self, entry: T) -> err::Result<obs::Observer> {
-        let checker = entry.checker();
+impl<'a, T: abs::Entry> Runner<T> {
+    pub fn run(&self) -> err::Result<obs::Observer> {
+        let checker = self.entry.checker();
 
         let fsa::Bundle {
             mut automata,
             manifest,
-        } = fsa::Bundle::new(entry, self.sync)?;
+        } = fsa::Bundle::new(self.entry.clone(), self.sync)?;
         let observer = obs::Observer::new();
         let shin = SharedState {
             conds: self.conds.clone(),
@@ -118,7 +121,7 @@ impl Runner {
             .and_then(move |s| Ok(s.into_inner()?.observer))
     }
 
-    fn run_rotation<T: abs::Entry>(
+    fn run_rotation(
         &self,
         shared: Arc<Mutex<SharedState<T::Checker>>>,
         automata: fsa::Set<T, T::Env>,

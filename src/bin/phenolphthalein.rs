@@ -62,8 +62,12 @@ fn run_with_args(args: ux::args::Args) -> Result<()> {
     let conds = args.conds();
     let sync = args.sync_factory();
 
-    let runner = run::Runner { conds, sync };
-    let obs = runner.run(test.spawn())?;
+    let runner = run::Runner {
+        conds,
+        sync,
+        entry: test.spawn(),
+    };
+    let obs = runner.run()?;
     print_obs(obs);
 
     Ok(())
