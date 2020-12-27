@@ -168,24 +168,6 @@ struct Inner<T, E> {
     state: Arc<AtomicU8>,
 }
 
-/// A bundle of prepared test data, ready to be run.
-pub struct Bundle<T, E> {
-    /// The test manifest.
-    pub manifest: manifest::Manifest,
-
-    /// A set of automata for each thread in the test.
-    pub automata: Set<T, E>,
-}
-
-impl<T: abs::Entry> Bundle<T, T::Env> {
-    /// Constructs a bundle from the given test entry.
-    pub fn new(entry: T, sync: sync::Factory) -> err::Result<Self> {
-        let manifest = entry.make_manifest()?;
-        let automata = Set::new(entry, manifest.clone(), sync)?;
-        Ok(Bundle { manifest, automata })
-    }
-}
-
 /// A set of test FSAs, ready to be sent to threads and run.
 ///
 /// We can always decompose a `Set` into a single set of use-once FSAs,
@@ -230,9 +212,14 @@ impl<T: Clone, E: Clone> Set<T, E> {
 impl<T: abs::Entry> Set<T, T::Env> {
     /// Constructs a `Set` from a test entry point and its associated manifest.
     ///
-    /// This function isn't public because it relies on the manifest and entry
-    /// point matching up.
-    fn new(entry: T, manifest: manifest::Manifest, sync: sync::Factory) -> err::Result<Self> {
+    /// This function relies on the manifest and entry point matching up; it
+    /// presently relies on the rest of the runner infrastructure ensuring
+    /// this.
+    pub(super) fn new(
+        entry: T,
+        manifest: manifest::Manifest,
+        sync: sync::Factory,
+    ) -> err::Result<Self> {
         let env = T::Env::for_manifest(&manifest)?;
         let b = sync(manifest.n_threads)?;
         let inner = Inner {
