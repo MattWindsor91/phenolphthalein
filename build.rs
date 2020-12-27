@@ -1,3 +1,3 @@
 fn main() {
-    cc::Build::new().file("src/c/env.c").compile("env");
+    cc::Build::new().file("src/testapi/c/env.c").compile("env");
 }

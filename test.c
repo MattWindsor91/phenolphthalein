@@ -4,7 +4,7 @@
 
 #include <stdatomic.h>
 #include <stdbool.h>
-#include "src/c/phenol.h"
+#include "src/testapi/c/phenol.h"
 
 /* Here is the Litmus test itself, with all parameters passed by pointers. */
 

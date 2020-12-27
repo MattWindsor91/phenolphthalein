@@ -1,3 +1,7 @@
+//! The abstract test API.
+//!
+//! This module contains the various traits that the actual language APIs
+//! implement.
 use crate::{env::Env, err, manifest, obs};
 
 /// Trait of cloneable entry points into tests.

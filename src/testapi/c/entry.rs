@@ -1,7 +1,7 @@
 use dlopen::symbor::{Container, Ref, SymBorApi, Symbol};
 
 use super::{env, manifest};
-use crate::{err, manifest as m, obs, test};
+use crate::{err, manifest as m, obs, testapi::abs};
 
 /// Entry point for C-ABI tests coming from dynamically loaded libraries.
 #[derive(SymBorApi, Clone)]
@@ -30,7 +30,7 @@ impl<'a> obs::Checker for Checker<'a> {
     }
 }
 
-impl<'a> test::Entry for Entry<'a> {
+impl<'a> abs::Entry for Entry<'a> {
     type Env = env::Env;
     type Checker = Checker<'a>;
 
@@ -62,7 +62,7 @@ impl Test {
     }
 }
 
-impl<'a> test::Test<'a> for Test {
+impl<'a> abs::Test<'a> for Test {
     type Entry = Entry<'a>;
 
     fn spawn(&self) -> self::Entry<'a> {

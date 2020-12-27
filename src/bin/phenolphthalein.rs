@@ -2,7 +2,11 @@ extern crate dlopen;
 #[macro_use]
 extern crate clap;
 
-use phenolphthalein::{c, err, obs, run, test::Test, ux};
+use phenolphthalein::{
+    err, obs, run,
+    testapi::{abs::Test, c},
+    ux,
+};
 
 use clap::{App, Arg};
 

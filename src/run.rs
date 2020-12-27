@@ -1,6 +1,6 @@
 //! The high-level test runner.
 //!
-use crate::{env, err, fsa, manifest, obs, test};
+use crate::{env, err, fsa, manifest, obs, testapi::abs};
 use crossbeam::thread;
 use fsa::Fsa;
 use std::sync::{Arc, Mutex};
@@ -39,7 +39,7 @@ pub struct Thread<C> {
 impl<C: obs::Checker> Thread<C> {
     pub fn run<T>(&self, t: fsa::Runnable<T, C::Env>) -> fsa::Done
     where
-        T: test::Entry<Env = C::Env>,
+        T: abs::Entry<Env = C::Env>,
     {
         let mut t = t;
         loop {
@@ -109,7 +109,7 @@ pub struct Runner {
 }
 
 impl Runner {
-    pub fn run<T: test::Entry>(&self, entry: T) -> err::Result<obs::Observer> {
+    pub fn run<T: abs::Entry>(&self, entry: T) -> err::Result<obs::Observer> {
         let checker = entry.checker();
 
         let fsa::Bundle {
@@ -138,7 +138,7 @@ impl Runner {
             .and_then(move |s| Ok(s.into_inner()?.observer))
     }
 
-    fn run_rotation<T: test::Entry>(
+    fn run_rotation<T: abs::Entry>(
         &self,
         shared: Arc<Mutex<SharedState<T::Checker>>>,
         automata: fsa::Set<T, T::Env>,

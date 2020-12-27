@@ -2,7 +2,7 @@
 
 pub mod sync;
 
-use super::{env::Env, err, manifest, test};
+use super::{env::Env, err, manifest, testapi::abs};
 use std::sync::{
     atomic::{AtomicU8, Ordering},
     Arc,
@@ -55,7 +55,7 @@ impl<T, E> Fsa for Runnable<T, E> {
     }
 }
 
-impl<T: test::Entry> Runnable<T, T::Env> {
+impl<T: abs::Entry> Runnable<T, T::Env> {
     /// Runs another iteration of this FSA's thread body.
     pub fn run(mut self) -> RunOutcome<T, T::Env> {
         if let Some(exit_type) = self.exit_type() {
@@ -78,6 +78,7 @@ impl<T: test::Entry> Runnable<T, T::Env> {
     }
 }
 
+/// Enumeration of outcomes from running a `Runnable`.
 pub enum RunOutcome<T, E> {
     /// The test has finished.
     Done(Done),
@@ -202,7 +203,7 @@ pub struct Bundle<T, E> {
     pub automata: Set<T, E>,
 }
 
-impl<T: test::Entry> Bundle<T, T::Env> {
+impl<T: abs::Entry> Bundle<T, T::Env> {
     /// Constructs a bundle from the given test entry.
     pub fn new(entry: T, sync: sync::Factory) -> err::Result<Self> {
         let manifest = entry.make_manifest()?;
@@ -252,7 +253,7 @@ impl<T: Clone, E: Clone> Set<T, E> {
     }
 }
 
-impl<T: test::Entry> Set<T, T::Env> {
+impl<T: abs::Entry> Set<T, T::Env> {
     /// Constructs a `Set` from a test entry point and its associated manifest.
     ///
     /// This function isn't public because it relies on the manifest and entry
