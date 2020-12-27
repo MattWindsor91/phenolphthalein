@@ -29,6 +29,7 @@ pub enum CheckResult {
 }
 
 /// An observer for the outcomes of a test.
+#[derive(Default)]
 pub struct Observer {
     /// The observations that this observer has made so far.
     pub obs: HashMap<Obs, Info>,
@@ -59,10 +60,7 @@ impl Info {
 
 impl Observer {
     pub fn new() -> Self {
-        Observer {
-            obs: HashMap::new(),
-            iterations: 0,
-        }
+        Self::default()
     }
 
     /// Observes a test environment into this runner's observations.

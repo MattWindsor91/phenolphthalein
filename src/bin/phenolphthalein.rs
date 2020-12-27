@@ -1,23 +1,10 @@
-extern crate crossbeam;
 extern crate dlopen;
 #[macro_use]
 extern crate clap;
-#[macro_use]
-extern crate dlopen_derive;
-extern crate libc;
 
-mod c;
-mod env;
-mod err;
-mod fsa;
-mod manifest;
-mod obs;
-mod run;
-mod test;
-mod ux;
+use phenolphthalein::{c, err, obs, run, test::Test, ux};
 
 use clap::{App, Arg};
-use test::Test;
 
 fn main() {
     let phenolphalein = App::new("phenolphthalein")
