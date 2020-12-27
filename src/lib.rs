@@ -6,9 +6,7 @@ extern crate dlopen_derive;
 extern crate libc;
 
 pub mod err;
-pub mod fsa;
 pub mod model;
-pub mod obs;
 pub mod run;
 pub mod testapi;
 pub mod ux;

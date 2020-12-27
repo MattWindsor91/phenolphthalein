@@ -3,7 +3,7 @@ extern crate dlopen;
 extern crate clap;
 
 use phenolphthalein::{
-    err, model, obs, run,
+    err, model, run,
     testapi::{abs::Test, c},
     ux,
 };
@@ -69,7 +69,7 @@ fn run_with_args(args: ux::args::Args) -> Result<()> {
     Ok(())
 }
 
-fn print_obs(observer: obs::Observer) {
+fn print_obs(observer: run::obs::Observer) {
     for (k, v) in observer.obs {
         println!(
             "{1} {2}> {0:?}",

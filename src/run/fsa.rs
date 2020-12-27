@@ -1,8 +1,7 @@
 //! The main testing finite state automaton, and helper functions for it.
 
-pub mod sync;
-
-use super::{
+use super::{halt, sync};
+use crate::{
     err,
     model::manifest,
     testapi::{abs, abs::Env},
@@ -62,10 +61,10 @@ impl<T, E> Fsa for Runnable<T, E> {
 impl<T: abs::Entry> Runnable<T, T::Env> {
     /// Runs another iteration of this FSA's thread body.
     pub fn run(mut self) -> RunOutcome<T, T::Env> {
-        if let Some(exit_type) = self.exit_type() {
+        if let Some(halt_type) = self.halt_type() {
             return RunOutcome::Done(Done {
                 tid: self.0.tid,
-                exit_type,
+                halt_type,
             });
         }
 
@@ -77,8 +76,8 @@ impl<T: abs::Entry> Runnable<T, T::Env> {
         }
     }
 
-    fn exit_type(&self) -> Option<ExitType> {
-        ExitType::from_u8(self.0.state.load(Ordering::Acquire))
+    fn halt_type(&self) -> Option<halt::Type> {
+        halt::Type::from_u8(self.0.state.load(Ordering::Acquire))
     }
 }
 
@@ -132,7 +131,7 @@ impl<T, E> Observable<T, E> {
 
     /// Relinquishes the ability to observe the environment, marks the test as
     /// dead, and returns to a waiting state.
-    pub fn kill(self, state: ExitType) -> Runnable<T, E> {
+    pub fn kill(self, state: halt::Type) -> Runnable<T, E> {
         /* TODO(@MattWindsor91): maybe return Done here, and mock up waiting
         on the final barrier, or return Waiting<Done> somehow. */
         self.0.state.store(state.to_u8(), Ordering::Release);
@@ -145,36 +144,7 @@ pub struct Done {
     tid: usize,
 
     /// The status at the end of the test.
-    pub exit_type: ExitType,
-}
-
-/// Enumeration of states the test can be left in when a FSA finishes.
-///
-/// `ExitType`s are ordered such that exiting is 'greater than' rotating.
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ExitType {
-    /// The test's threads should be torn down and reset.
-    Rotate,
-    /// The test should exit.
-    Exit,
-}
-
-impl ExitType {
-    /// Packs a ExitType into a state byte.
-    const fn to_u8(self) -> u8 {
-        match self {
-            Self::Rotate => 1,
-            Self::Exit => 2,
-        }
-    }
-    /// Unpacks a ExitType from a state byte.
-    const fn from_u8(x: u8) -> Option<Self> {
-        match x {
-            1 => Some(Self::Rotate),
-            2 => Some(Self::Exit),
-            _ => None,
-        }
-    }
+    pub halt_type: halt::Type,
 }
 
 impl Fsa for Done {
@@ -239,7 +209,7 @@ impl<T: Clone, E: Clone> Set<T, E> {
         self,
         spawn: impl Fn(Ready<T, E>) -> H,
         join: fn(H) -> err::Result<Done>,
-    ) -> err::Result<(ExitType, Self)> {
+    ) -> err::Result<(halt::Type, Self)> {
         let vec = self.vec.clone();
 
         // Collecting to force all handles to be produced before we join any
@@ -247,11 +217,11 @@ impl<T: Clone, E: Clone> Set<T, E> {
 
         // TODO(@MattWindsor91): the observations should only be visible from the environment once we've joined these threads
         // in general, all of the thread-unsafe stuff should be hidden inside the environment
-        let mut et = ExitType::Exit;
+        let mut et = halt::Type::Exit;
         for h in handles {
             let done = join(h)?;
             // These'll be the same, so it doesn't matter which we grab.
-            et = done.exit_type;
+            et = done.halt_type;
         }
         Ok((et, Set { vec }))
     }

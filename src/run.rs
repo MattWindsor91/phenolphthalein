@@ -1,35 +1,15 @@
 //! The high-level test runner.
 //!
-use crate::{err, fsa, model, obs, testapi::abs};
+use crate::{err, model, testapi::abs};
 use crossbeam::thread;
-use fsa::Fsa;
 use std::sync::{Arc, Mutex};
 
-/// An control flow condition for a test run.
-#[derive(Copy, Clone)]
-pub enum Condition {
-    /// The test should rotate or exit when the iteration count reaches this
-    /// a multiple of this number.
-    EveryNIterations(usize, fsa::ExitType),
-}
+mod fsa;
+pub mod halt;
+pub mod obs;
+pub mod sync;
 
-fn exit_if(p: bool, ty: fsa::ExitType) -> Option<fsa::ExitType> {
-    if p {
-        Some(ty)
-    } else {
-        None
-    }
-}
-
-impl Condition {
-    /// Gets the sort of exit, if any, that should occur given this condition
-    /// and the most recent observation os.
-    pub fn exit_type(&self, os: &obs::Summary) -> Option<fsa::ExitType> {
-        match self {
-            Self::EveryNIterations(n, et) => exit_if(os.iterations % *n == 0, *et),
-        }
-    }
-}
+use fsa::Fsa;
 
 /// A single thread controller for a test run.
 pub struct Thread<C> {
@@ -59,7 +39,7 @@ impl<C: abs::Checker> Thread<C> {
         }
     }
 
-    fn handle_env(&self, env: &mut C::Env) -> Option<fsa::ExitType> {
+    fn handle_env(&self, env: &mut C::Env) -> Option<halt::Type> {
         // TODO(@MattWindsor91): handle poisoning here
         let mut s = self.shared.lock().unwrap();
         s.handle(env)
@@ -71,8 +51,8 @@ impl<C: abs::Checker> Thread<C> {
 struct SharedState<C> {
     /// The state checker for the test.
     checker: C,
-    /// The exit condition for the test.
-    conds: Vec<Condition>,
+    /// The halt conditions for the test.
+    conds: Vec<halt::Condition>,
     /// The observer for the test.
     observer: obs::Observer,
     /// The manifest for the test.
@@ -81,7 +61,7 @@ struct SharedState<C> {
 
 impl<C: abs::Checker> SharedState<C> {
     /// Handles the environment, including observing it and resetting it.
-    fn handle(&mut self, env: &mut C::Env) -> Option<fsa::ExitType> {
+    fn handle(&mut self, env: &mut C::Env) -> Option<halt::Type> {
         let mut m = obs::Manifested {
             manifest: &self.manifest,
             env,
@@ -92,7 +72,7 @@ impl<C: abs::Checker> SharedState<C> {
     }
 
     /// Checks whether the test should exit now.
-    fn exit_type(&self, summary: obs::Summary) -> Option<fsa::ExitType> {
+    fn exit_type(&self, summary: obs::Summary) -> Option<halt::Type> {
         self.conds
             .iter()
             .filter_map(|c| c.exit_type(&summary))
@@ -102,10 +82,10 @@ impl<C: abs::Checker> SharedState<C> {
 
 pub struct Runner {
     /// The exit conditions that should be applied to tests run by this runner.
-    pub conds: Vec<Condition>,
+    pub conds: Vec<halt::Condition>,
 
     /// The factory function to use to construct synchronisation.
-    pub sync: fsa::sync::Factory,
+    pub sync: sync::Factory,
 }
 
 impl Runner {
@@ -127,7 +107,7 @@ impl Runner {
 
         loop {
             let (etype, am) = self.run_rotation(shared.clone(), automata)?;
-            if etype == fsa::ExitType::Exit {
+            if etype == halt::Type::Exit {
                 break;
             }
             automata = am;
@@ -142,7 +122,7 @@ impl Runner {
         &self,
         shared: Arc<Mutex<SharedState<T::Checker>>>,
         automata: fsa::Set<T, T::Env>,
-    ) -> err::Result<(fsa::ExitType, fsa::Set<T, T::Env>)> {
+    ) -> err::Result<(halt::Type, fsa::Set<T, T::Env>)> {
         thread::scope(|s| {
             automata.run(
                 |r: fsa::Ready<T, T::Env>| {

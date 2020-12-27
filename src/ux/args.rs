@@ -1,4 +1,4 @@
-use crate::{fsa, run};
+use crate::{run, run::halt};
 
 /// Name of the `Spinner` synchronisation method.
 pub const SYNC_SPINNER: &str = "spinner";
@@ -41,18 +41,18 @@ impl<'a> Args<'a> {
     }
 
     /// Gets the run conditions requested in this argument set.
-    pub fn conds(&self) -> Vec<run::Condition> {
+    pub fn conds(&self) -> Vec<halt::Condition> {
         let mut v = Vec::with_capacity(2);
         if self.iterations != 0 {
-            v.push(run::Condition::EveryNIterations(
+            v.push(halt::Condition::EveryNIterations(
                 self.iterations,
-                fsa::ExitType::Exit,
+                run::halt::Type::Exit,
             ))
         }
         if 0 < self.period && self.period < self.iterations {
-            v.push(run::Condition::EveryNIterations(
+            v.push(halt::Condition::EveryNIterations(
                 self.period,
-                fsa::ExitType::Rotate,
+                run::halt::Type::Rotate,
             ))
         }
         v
@@ -60,10 +60,10 @@ impl<'a> Args<'a> {
 
     /// Gets the correct factory method for the synchronisation primitive
     /// requested in this argument set.
-    pub fn sync_factory(&self) -> fsa::sync::Factory {
+    pub fn sync_factory(&self) -> run::sync::Factory {
         match self.sync {
-            SyncMethod::Barrier => fsa::sync::make_barrier,
-            SyncMethod::Spinner => fsa::sync::make_spinner,
+            SyncMethod::Barrier => run::sync::make_barrier,
+            SyncMethod::Spinner => run::sync::make_spinner,
         }
     }
 }
