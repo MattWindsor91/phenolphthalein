@@ -18,6 +18,9 @@ pub struct Args<'a> {
     pub iterations: usize,
     /// The parsed thread swap period.
     pub period: usize,
+    /// Whether threads should be permuted.
+    /// (This may or may not be a negative flag in the actual clap parser.)
+    pub permute_threads: bool,
 }
 
 impl<'a> Args<'a> {
@@ -32,11 +35,14 @@ impl<'a> Args<'a> {
         let sstr = matches.value_of("sync").unwrap();
         let sync = sstr.parse()?;
 
+        let permute_threads = !matches.is_present("no_permute_threads");
+
         Ok(Self {
             input,
             iterations,
             period,
             sync,
+            permute_threads,
         })
     }
 

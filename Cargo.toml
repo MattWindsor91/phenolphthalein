@@ -8,10 +8,11 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33"
-libc = "0.2"
 crossbeam = "0.8.0"
 dlopen = "0.1.8"
 dlopen_derive = "0.1.4"
+libc = "0.2"
+rand = "0.8"
 
 [build-dependencies]
 cc = "1.0"

@@ -16,6 +16,12 @@ fn main() {
         .version(crate_version!())
         .about("Concurrency test runner")
         .arg(
+            Arg::with_name("no_permute_threads")
+                .help("Don't permute thread assignments each period")
+                .short("-P")
+                .long("--no-permute-threads"),
+        )
+        .arg(
             Arg::with_name("sync")
                 .help("Synchronisation method to use")
                 .short("-s")
@@ -66,6 +72,7 @@ fn run_with_args(args: ux::args::Args) -> Result<()> {
         conds,
         sync,
         entry: test.spawn(),
+        permute_threads: args.permute_threads,
     };
     let obs = runner.run()?;
     print_obs(obs);

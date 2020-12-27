@@ -6,6 +6,7 @@ use crate::{
     model::manifest,
     testapi::{abs, abs::Env},
 };
+use rand::seq::SliceRandom;
 use std::sync::{
     atomic::{AtomicU8, Ordering},
     Arc,
@@ -206,6 +207,12 @@ impl<T: Clone, E: Clone> Set<T, E> {
             et = done.halt_type;
         }
         Ok((et, Set { vec }))
+    }
+
+    /// Permutes the thread automata inside this set.
+    pub fn permute<R: rand::Rng>(&mut self, rng: &mut R) {
+        let v = &mut self.vec[..];
+        v.shuffle(rng);
     }
 }
 
