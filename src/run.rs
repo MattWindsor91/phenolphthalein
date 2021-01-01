@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 mod fsa;
 pub mod halt;
-pub mod obs;
+mod obs;
 mod shared;
 pub mod sync;
 mod thread;
@@ -27,7 +27,7 @@ pub struct Runner<T> {
 }
 
 impl<'a, T: abs::Entry> Runner<T> {
-    pub fn run(&self) -> err::Result<obs::Observer> {
+    pub fn run(&self) -> err::Result<model::obs::Report> {
         let manifest = self.entry.make_manifest()?;
         let shared = self.make_shared_state(manifest.clone())?;
         let mut rng = rand::thread_rng();
@@ -46,7 +46,7 @@ impl<'a, T: abs::Entry> Runner<T> {
 
         Arc::try_unwrap(shared)
             .map_err(|_| err::Error::LockReleaseFailed)
-            .and_then(move |s| Ok(s.into_inner()?.observer))
+            .and_then(move |s| Ok(s.into_inner()?.observer.into_report()))
     }
 
     fn make_shared_state(

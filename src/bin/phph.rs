@@ -9,9 +9,10 @@ use std::sync::{
 };
 
 use phenolphthalein::{
-    err,  run,
+    err, run,
     testapi::{abs::Test, c},
-    ux, ux::obs::Dumper,
+    ux,
+    ux::obs::Dumper,
 };
 
 use clap::{App, Arg};
@@ -85,9 +86,7 @@ fn run_with_args(args: ux::args::Args) -> Result<()> {
     let obs = runner.run()?;
 
     // TODO(@MattWindsor91): don't hardcode this
-    ux::obs::HistogramDumper{}.dump(obs);
-
-    Ok(())
+    Ok(ux::obs::HistogramDumper {}.dump(obs)?)
 }
 
 fn setup_ctrlc() -> Result<run::halt::Condition> {

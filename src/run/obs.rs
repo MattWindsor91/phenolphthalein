@@ -54,6 +54,15 @@ impl Observer {
         self.obs.insert(state, info);
         info
     }
+
+    /// Consumes this Observer and returns a summary of its state.
+    pub fn into_report(self) -> model::obs::Report {
+        let outcome = self.obs.iter().map(|(_, v)| v.check_result).max();
+        model::obs::Report {
+            outcome,
+            obs: self.obs,
+        }
+    }
 }
 
 /// Gets the current state of the environment.

@@ -31,3 +31,12 @@ impl Obs {
         }
     }
 }
+
+/// A final report of observations coming from a test run.
+pub struct Report {
+    /// The overall outcome of checks performed on states on this run.
+    pub outcome: Option<check::Outcome>,
+
+    /// The full state observation set.
+    pub obs: Set,
+}
