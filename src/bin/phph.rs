@@ -9,9 +9,9 @@ use std::sync::{
 };
 
 use phenolphthalein::{
-    err, model, run,
+    err,  run,
     testapi::{abs::Test, c},
-    ux,
+    ux, ux::obs::Dumper,
 };
 
 use clap::{App, Arg};
@@ -83,7 +83,9 @@ fn run_with_args(args: ux::args::Args) -> Result<()> {
         permute_threads: args.permute_threads,
     };
     let obs = runner.run()?;
-    print_obs(obs);
+
+    // TODO(@MattWindsor91): don't hardcode this
+    ux::obs::HistogramDumper{}.dump(obs);
 
     Ok(())
 }
@@ -93,19 +95,6 @@ fn setup_ctrlc() -> Result<run::halt::Condition> {
     let c = run::halt::Condition::OnSignal(sigb.clone(), run::halt::Type::Exit);
     ctrlc::set_handler(move || sigb.store(true, Ordering::Release))?;
     Ok(c)
-}
-
-fn print_obs(observer: run::obs::Observer) {
-    for (k, v) in observer.obs {
-        println!("{1} {2}> {0:?}", k, v.occurs, check_sigil(v.check_result));
-    }
-}
-
-fn check_sigil(r: model::check::Outcome) -> &'static str {
-    match r {
-        model::check::Outcome::Passed => "*",
-        model::check::Outcome::Failed => ":",
-    }
 }
 
 /// A top-level error.
