@@ -12,14 +12,14 @@ pub(super) struct Manifest {
     n_threads: libc::size_t,
     /// Number of atomic_ints in this test.
     n_atomic_ints: libc::size_t,
-    /// Number of ints in this test.
-    n_ints: libc::size_t,
     /// Initial value for each atomic_int.
     atomic_int_initials: *const libc::c_int,
-    /// Initial value for each int.
-    int_initials: *const libc::c_int,
     /// Name of each atomic_int.
     atomic_int_names: *const *const libc::c_char,
+    /// Number of ints in this test.
+    n_ints: libc::size_t,
+    /// Initial value for each int.
+    int_initials: *const libc::c_int,
     /// Name of each int.
     int_names: *const *const libc::c_char,
 }

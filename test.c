@@ -42,10 +42,10 @@ const char *int_names[2] = {"0:r0", "1:r0"};
 struct manifest manifest = {
     .n_threads = 2,
     .n_atomic_ints = 2,
-    .n_ints = 2,
     .atomic_int_initials = atomic_int_initials,
-    .int_initials = int_initials,
     .atomic_int_names = atomic_int_names,
+    .n_ints = 2,
+    .int_initials = int_initials,
     .int_names = int_names,
 };
 

@@ -15,16 +15,17 @@ struct env {
 
 struct manifest {
     size_t n_threads;      /* Number of threads in this test. */
-    size_t n_atomic_ints;  /* Number of atomic_ints in this test. */
-    size_t n_ints;         /* Number of ints in this test. */
 
-    /* These fields are arrays with size set to the respective number above. */
+    /* For each type, the number of variables of that type followed by arrays
+       with size set to the respective number. */
 
-    int *atomic_int_initials;  /* Initial value for each atomic_int. */
-    int *int_initials;         /* Initial value for each int. */
+    size_t n_atomic_ints;            /* Number of atomic_ints in this test. */
+    const int *atomic_int_initials;  /* Initial value for each atomic_int. */
+    const char **atomic_int_names;   /* Name of each atomic_int. */
 
-    const char **atomic_int_names;  /* Name of each atomic_int. */
-    const char **int_names;         /* Name of each int. */
+    size_t n_ints;            /* Number of ints in this test. */
+    const int *int_initials;  /* Initial value for each int. */
+    const char **int_names;   /* Name of each int. */
 };
 
 #endif /* PHENOL_H */
