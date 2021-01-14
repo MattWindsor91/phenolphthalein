@@ -77,13 +77,15 @@ fn run_with_args(args: ux::args::Args) -> Result<()> {
 
     let sync = args.sync_factory();
 
-    let runner = run::Runner {
+    let mut runner = run::Builder {
         conds,
         sync,
         entry: test.spawn(),
         permute_threads: args.permute_threads,
-    };
-    let obs = runner.run()?;
+    }
+    .build()?;
+    runner.run()?;
+    let obs = runner.into_report()?;
 
     // TODO(@MattWindsor91): don't hardcode this
     Ok(ux::obs::HistogramDumper {}.dump(obs)?)
