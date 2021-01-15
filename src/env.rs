@@ -6,6 +6,8 @@ use crate::{err, manifest};
 /// that aren't thread-safe to run, but may be more useful later on.
 pub trait Env: Sized + Clone {
     /// Constructs an environment for the given manifest.
+    /// The environment need not contain the initial values; these will be
+    /// added in later.
     fn for_manifest(m: &manifest::Manifest) -> err::Result<Self>;
 
     /// Gets the atomic integer in slot i.

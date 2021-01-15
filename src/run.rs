@@ -8,4 +8,4 @@ mod shared;
 pub mod sync;
 mod thread;
 
-pub use runner::Runner;
+pub use runner::{Builder, Runner};

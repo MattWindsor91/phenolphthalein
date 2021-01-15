@@ -1,6 +1,6 @@
 //! The main testing finite state automaton, and helper functions for it.
 
-use super::{halt, sync};
+use super::{halt, obs, sync};
 use crate::{
     err,
     model::manifest,
@@ -227,7 +227,15 @@ impl<T: abs::Entry> Set<T, T::Env> {
         manifest: manifest::Manifest,
         sync: sync::Factory,
     ) -> err::Result<Self> {
-        let env = T::Env::for_manifest(&manifest)?;
+        let mut env = T::Env::for_manifest(&manifest)?;
+        /* There is no obligation that the above environment has the correct
+        initial values. */
+        obs::Manifested {
+            env: &mut env,
+            manifest: &manifest,
+        }
+        .reset();
+
         let b = sync(manifest.n_threads)?;
         let inner = Inner {
             tid: manifest.n_threads - 1,
