@@ -15,6 +15,8 @@ pub type Set = HashMap<State, Obs>;
 /// Information about an observation.
 #[derive(Copy, Clone)]
 pub struct Obs {
+    /// The number of the cycle where this observation first occurred.
+    pub iteration: usize,
     /// The number of times this state has occurred.
     pub occurs: usize,
     /// The result of asking the test to check this state.
@@ -27,7 +29,7 @@ impl Obs {
     pub fn inc(&self) -> Obs {
         Obs {
             occurs: self.occurs.saturating_add(1),
-            check_result: self.check_result,
+            ..*self
         }
     }
 }

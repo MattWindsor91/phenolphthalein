@@ -25,11 +25,12 @@ impl HistogramDumper {
 
         for (state, v) in obs {
             println!(
-                "{occ:pad$} {sigil}> {state:?}",
+                "{occ:pad$} {sigil}> {state:?} (iter {iter})",
                 occ = v.occurs,
                 pad = pad,
                 sigil = self.check_sigil(v.check_result),
-                state = state
+                state = state,
+                iter = v.iteration,
             );
         }
     }
