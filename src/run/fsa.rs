@@ -70,7 +70,7 @@ impl<T: abs::Entry> Runnable<T, T::Env> {
         }
 
         self.0.entry.run(self.0.tid, &mut self.0.env);
-        if self.0.b.run() {
+        if self.0.sync.run() {
             RunOutcome::Observe(Observable(self.0))
         } else {
             RunOutcome::Wait(Waiting(self.0))
@@ -103,7 +103,7 @@ impl<T, E> Fsa for Waiting<T, E> {
 
 impl<T, E> Waiting<T, E> {
     pub fn wait(self) -> Runnable<T, E> {
-        self.0.b.wait();
+        self.0.sync.wait();
         Runnable(self.0)
     }
 }
@@ -126,7 +126,7 @@ impl<T, E> Observable<T, E> {
     /// Relinquishes the ability to observe the environment, and returns to a
     /// running state.
     pub fn relinquish(self) -> Runnable<T, E> {
-        self.0.b.obs();
+        self.0.sync.obs();
         Runnable(self.0)
     }
 
@@ -160,13 +160,36 @@ struct Inner<T, E> {
     tid: usize,
     env: E,
     entry: T,
-    b: Arc<dyn sync::Synchroniser>,
+    sync: Arc<dyn sync::Synchroniser>,
 
     /// Set to rotate when an observer thread has decided the test should
     /// rotate its threads, and exit when it decides the test should
     /// be stopped; once set to either, all threads will stop the test the next
     /// time they try to run the test.
     state: Arc<AtomicU8>,
+}
+
+impl<T, E> Inner<T, E> {
+    fn new(tid: usize, entry: T, env: E, sync: Arc<dyn sync::Synchroniser>) -> Self {
+        Inner {
+            tid,
+            env,
+            sync,
+            entry,
+            state: Arc::new(AtomicU8::new(0)),
+        }
+    }
+}
+
+impl<T: Clone, E: Clone> Inner<T, E> {
+    // These aren't public because Inner isn't public.
+
+    /// Clones an inner handle, but with the new thread ID `new_tid`.
+    fn clone_with_tid(&self, new_tid: usize) -> Self {
+        let mut new = self.clone();
+        new.tid = new_tid;
+        new
+    }
 }
 
 /// A set of test FSAs, ready to be sent to threads and run.
@@ -236,24 +259,26 @@ impl<T: abs::Entry> Set<T, T::Env> {
         }
         .reset();
 
-        let b = sync(manifest.n_threads)?;
-        let inner = Inner {
-            tid: manifest.n_threads - 1,
-            env,
-            b,
-            entry,
-            state: Arc::new(AtomicU8::new(0)),
-        };
+        let nth = manifest.n_threads;
+        Ok(Self::new_with_env_and_sync(nth, entry, env, sync(nth)?))
+    }
+
+    fn new_with_env_and_sync(
+        nthreads: usize,
+        entry: T,
+        env: T::Env,
+        sync: Arc<dyn sync::Synchroniser>,
+    ) -> Self {
+        let last_tid = nthreads - 1;
+        let inner = Inner::new(last_tid, entry, env, sync);
         let mut automata = Set {
-            vec: Vec::with_capacity(manifest.n_threads),
+            vec: Vec::with_capacity(nthreads),
         };
-        for tid in 0..manifest.n_threads - 1 {
-            let mut tc = inner.clone();
-            tc.tid = tid;
-            automata.vec.push(tc);
+        for tid in 0..last_tid {
+            automata.vec.push(inner.clone_with_tid(tid));
         }
         automata.vec.push(inner);
-        Ok(automata)
+        automata
     }
 }
 
