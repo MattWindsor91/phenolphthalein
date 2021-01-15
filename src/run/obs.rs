@@ -47,7 +47,7 @@ impl Observer {
                 model::obs::Obs {
                     occurs: 1,
                     check_result,
-                    iteration: self.iterations
+                    iteration: self.iterations,
                 }
             },
             model::obs::Obs::inc,
