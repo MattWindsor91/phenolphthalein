@@ -66,6 +66,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "colored"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3616f750b84d8f0de8a58bda93e08e2a81ad3f523089b05f1dffecab48c6cbd"
+dependencies = [
+ "atty",
+ "lazy_static",
+ "winapi",
+]
+
+[[package]]
 name = "const_fn"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -233,12 +244,14 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "clap",
+ "colored",
  "crossbeam",
  "ctrlc",
  "dlopen",
  "dlopen_derive",
  "libc",
  "rand",
+ "tabwriter",
 ]
 
 [[package]]
@@ -306,6 +319,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9251239e129e16308e70d853559389de218ac275b515068abc96829d05b948a"
+dependencies = [
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-syntax"
+version = "0.6.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5eb417147ba9860a96cfe72a0b93bf88fee1744b5636ec99ab20c1aa9376581"
+
+[[package]]
 name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -326,6 +354,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
+]
+
+[[package]]
+name = "tabwriter"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36205cfc997faadcc4b0b87aaef3fbedafe20d38d4959a7ca6ff803564051111"
+dependencies = [
+ "lazy_static",
+ "regex",
+ "unicode-width",
 ]
 
 [[package]]

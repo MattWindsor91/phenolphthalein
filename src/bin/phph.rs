@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate clap;
-extern crate ctrlc;
-extern crate dlopen;
+
+use std::io;
 
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -9,10 +9,10 @@ use std::sync::{
 };
 
 use phenolphthalein::{
-    err, run,
+    err, model, run,
     testapi::{abs::Test, c},
     ux,
-    ux::obs::Dumper,
+    ux::report::Dumper,
 };
 
 use clap::{App, Arg};
@@ -85,10 +85,14 @@ fn run_with_args(args: ux::args::Args) -> Result<()> {
     }
     .build()?;
     runner.run()?;
-    let obs = runner.into_report()?;
 
     // TODO(@MattWindsor91): don't hardcode this
-    Ok(ux::obs::HistogramDumper {}.dump(obs)?)
+    dump_report(std::io::stdout(), runner.into_report()?)
+}
+
+fn dump_report<W: io::Write>(w: W, r: model::obs::Report) -> Result<()> {
+    ux::report::HistogramDumper {}.dump(w, r)?;
+    Ok(())
 }
 
 fn setup_ctrlc() -> Result<run::halt::Condition> {
@@ -105,7 +109,9 @@ enum Error {
     ParsingArgs(ux::args::Error),
     /// Error running the test.
     RunningTest(err::Error),
-    /// There was a problem installing the control-C interrupt handler.
+    /// Error dumping the report.
+    Reporting(io::Error),
+    /// Error installing the control-C interrupt handler.
     CtrlC(ctrlc::Error),
 }
 type Result<T> = std::result::Result<T, Error>;
@@ -119,6 +125,12 @@ impl From<ux::args::Error> for Error {
 impl From<err::Error> for Error {
     fn from(e: err::Error) -> Self {
         Self::RunningTest(e)
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Self::Reporting(e)
     }
 }
 

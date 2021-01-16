@@ -7,6 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+colored = "2.0.0"
 clap = "2.33"
 crossbeam = "0.8.0"
 ctrlc = { version = "3.1", features = ["termination"] }
@@ -14,6 +15,7 @@ dlopen = "0.1.8"
 dlopen_derive = "0.1.4"
 libc = "0.2"
 rand = "0.8"
+tabwriter = { version = "1.2.1", features = ["ansi_formatting"] }
 
 [build-dependencies]
 cc = "1.0"

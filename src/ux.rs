@@ -3,4 +3,4 @@
 //! This includes argument parsing.
 
 pub mod args;
-pub mod obs;
+pub mod report;
