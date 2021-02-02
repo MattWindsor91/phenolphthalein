@@ -66,7 +66,9 @@ pub trait Env: Sized + Clone {
     /// valid but undefined result if i is out of bounds.
     fn int(&self, i: usize) -> i32;
 
+    /// Sets the atomic integer in slot i to value v.
     fn set_atomic_int(&mut self, i: usize, v: i32);
 
+    /// Sets the integer in slot i to value v.
     fn set_int(&mut self, i: usize, v: i32);
 }

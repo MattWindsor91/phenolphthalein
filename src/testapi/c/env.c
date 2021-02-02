@@ -38,7 +38,7 @@ free_env(struct env *e)
 	if (1 < atomic_fetch_sub(&e->rc, 1)) return;
 
 	if (e->atomic_ints != NULL) free(e->atomic_ints);
-	if (e->atomic_ints != NULL) free(e->ints);
+	if (e->ints != NULL) free(e->ints);
 	free(e);
 }
 
