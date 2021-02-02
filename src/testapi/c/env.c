@@ -16,6 +16,8 @@ alloc_env(size_t atomic_ints, size_t ints)
 
 	e->atomic_ints = calloc(atomic_ints, sizeof(atomic_int));
 	e->ints = calloc(ints, sizeof(int));
+	e->natomic_ints = atomic_ints;
+	e->nints = ints;
 	
 	return e;
 }
@@ -45,27 +47,27 @@ free_env(struct env *e)
 int
 get_atomic_int(const struct env *e, size_t c)
 {
-	if (c < e->natomic_ints) return 0;
+	if (e->natomic_ints < c) return 0;
 	return e->atomic_ints[c];
 }
 
 int
 get_int(const struct env *e, size_t c)
 {
-	if (c < e->nints) return 0;
+	if (e->nints < c) return 0;
 	return e->ints[c];
 }
 
 void
 set_atomic_int(struct env *e, size_t c, int v)
 {
-	if (c < e->natomic_ints) return;
+	if (e->natomic_ints < c) return;
 	e->atomic_ints[c] = v;
 }
 
 void
 set_int(struct env *e, size_t c, int v)
 {
-	if (c < e->nints) return;
+	if (e->nints < c) return;
 	e->ints[c] = v;
 }
