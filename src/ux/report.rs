@@ -59,6 +59,7 @@ impl HistogramDumper {
         match r {
             model::check::Outcome::Passed => "*".green(),
             model::check::Outcome::Failed => ":".red(),
+            model::check::Outcome::Unknown => "?".yellow(),
         }
     }
 }

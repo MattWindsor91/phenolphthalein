@@ -9,20 +9,22 @@ pub struct Entry<'a> {
     manifest: Ref<'a, manifest::Manifest>,
 
     test: Symbol<'a, unsafe extern "C" fn(tid: libc::size_t, env: *mut env::UnsafeEnv)>,
-    check: Symbol<'a, unsafe extern "C" fn(env: *const env::UnsafeEnv) -> bool>,
+    check: Option<Symbol<'a, unsafe extern "C" fn(env: *const env::UnsafeEnv) -> bool>>,
 }
 
 /// A checker for C-ABI test environments.
 #[derive(Clone)]
 pub struct Checker<'a> {
-    sym: Symbol<'a, unsafe extern "C" fn(env: *const env::UnsafeEnv) -> bool>,
+    sym: Option<Symbol<'a, unsafe extern "C" fn(env: *const env::UnsafeEnv) -> bool>>,
 }
 
 impl<'a> abs::Checker for Checker<'a> {
     type Env = env::Env;
 
     fn check(&self, e: &Self::Env) -> model::check::Outcome {
-        model::check::Outcome::from_pass_bool(unsafe { (self.sym)(e.p) })
+        self.sym
+            .map(|sym| model::check::Outcome::from_pass_bool(unsafe { (sym)(e.p) }))
+            .unwrap_or(model::check::Outcome::Unknown)
     }
 }
 

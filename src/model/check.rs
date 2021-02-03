@@ -3,14 +3,16 @@
 /// The result of running a checker.
 ///
 /// Outcomes are ordered such that `max` on an iterator of outcomes will return
-/// the correct final outcome (`None` if the outcomes are empty, `Passed` if
-/// all are passes, and `Failed` otherwise).
+/// the correct final outcome (`None` if the outcomes are empty, `Unknown` if
+/// any were unknown, `Passed` if all are passes, and `Failed` otherwise).
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq, Ord)]
 pub enum Outcome {
     /// The observation passed its check.
     Passed,
     /// The observation failed its check.
     Failed,
+    /// The observation has no determined outcome.
+    Unknown,
 }
 
 impl Outcome {
@@ -50,9 +52,16 @@ mod test {
     }
 
     #[test]
-    /// `max` of a mixed iterator should return a fail.
+    /// `max` of a mixed determinate iterator should return a fail.
     fn test_max_mixed() {
         let v = vec![Outcome::Passed, Outcome::Failed, Outcome::Passed];
         assert_eq!(v.into_iter().max(), Some(Outcome::Failed))
+    }
+
+    #[test]
+    /// `max` of an iterator with one unknown should return an unknown.
+    fn test_max_unknown() {
+        let v = vec![Outcome::Unknown, Outcome::Failed, Outcome::Passed];
+        assert_eq!(v.into_iter().max(), Some(Outcome::Unknown))
     }
 }
