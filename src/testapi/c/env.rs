@@ -14,10 +14,10 @@ extern "C" {
     fn alloc_env(atomic_ints: libc::size_t, ints: libc::size_t) -> *mut UnsafeEnv;
     fn copy_env(e: *mut UnsafeEnv) -> *mut UnsafeEnv;
     fn free_env(e: *mut UnsafeEnv);
-    fn get_atomic_int(e: *const UnsafeEnv, index: libc::size_t) -> libc::c_int;
-    fn get_int(e: *const UnsafeEnv, index: libc::size_t) -> libc::c_int;
-    fn set_atomic_int(e: *mut UnsafeEnv, index: libc::size_t, value: libc::c_int);
-    fn set_int(e: *mut UnsafeEnv, index: libc::size_t, value: libc::c_int);
+    fn get_atomic_int32(e: *const UnsafeEnv, index: libc::size_t) -> i32;
+    fn get_int32(e: *const UnsafeEnv, index: libc::size_t) -> i32;
+    fn set_atomic_int32(e: *mut UnsafeEnv, index: libc::size_t, value: i32);
+    fn set_int32(e: *mut UnsafeEnv, index: libc::size_t, value: i32);
 }
 
 /// Thin layer over the C environment struct.
@@ -33,23 +33,23 @@ impl abs::Env for Env {
     /// Gets the atomic integer in slot i.
     /// Assumes that the C implementation does range checking and returns a
     /// valid but undefined result if i is out of bounds.
-    fn atomic_int(&self, i: usize) -> i32 {
-        unsafe { get_atomic_int(self.p, i) }
+    fn get_atomic_i32(&self, i: usize) -> i32 {
+        unsafe { get_atomic_int32(self.p, i) }
     }
 
     /// Gets the integer in slot i.
     /// Assumes that the C implementation does range checking and returns a
     /// valid but undefined result if i is out of bounds.
-    fn int(&self, i: usize) -> i32 {
-        unsafe { get_int(self.p, i) }
+    fn get_i32(&self, i: usize) -> i32 {
+        unsafe { get_int32(self.p, i) }
     }
 
-    fn set_atomic_int(&mut self, i: usize, v: i32) {
-        unsafe { set_atomic_int(self.p, i, v) }
+    fn set_atomic_i32(&mut self, i: usize, v: i32) {
+        unsafe { set_atomic_int32(self.p, i, v) }
     }
 
-    fn set_int(&mut self, i: usize, v: i32) {
-        unsafe { set_int(self.p, i, v) }
+    fn set_i32(&mut self, i: usize, v: i32) {
+        unsafe { set_int32(self.p, i, v) }
     }
 
     fn for_manifest(m: &manifest::Manifest) -> err::Result<Self> {

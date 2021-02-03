@@ -4,19 +4,20 @@
 
 #include <stdatomic.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "src/testapi/c/phenol.h"
 
 /* Here is the Litmus test itself, with all parameters passed by pointers. */
 
 void
-P0(atomic_int *x, atomic_int *y, int *r0)
+P0(_Atomic int32_t *x, _Atomic int32_t *y, int32_t *r0)
 {
     *r0 = atomic_load_explicit(x, memory_order_relaxed);
     atomic_store_explicit(y, 1, memory_order_relaxed);
 }
 
 void
-P1(atomic_int *x, atomic_int *y, int *r0)
+P1(_Atomic int32_t *x, _Atomic int32_t *y, int32_t *r0)
 {
     *r0 = atomic_load_explicit(y, memory_order_relaxed);
     atomic_store_explicit(x, 1, memory_order_relaxed);
@@ -27,26 +28,26 @@ P1(atomic_int *x, atomic_int *y, int *r0)
 
 /* These macros aren't necessary, but make it a bit clearer as to which
    variables we're pulling out of the environment. */
-#define _x(e) (e->atomic_ints[0])
-#define _y(e) (e->atomic_ints[1])
-#define _0_r0(e) (e->ints[0])
-#define _1_r0(e) (e->ints[1])
+#define _x(e) (e->atomic_int32[0])
+#define _y(e) (e->atomic_int32[1])
+#define _0_r0(e) (e->int32[0])
+#define _1_r0(e) (e->int32[1])
 
 /* phenolphthalein expects a `struct manifest` called `manifest` to be
    exported, with various pieces of information about the test such as the
    names of variables, number of threads, and so on. */
-int atomic_int_initials[2] = {0, 0};
-int int_initials[2] = {0, 0};
+int32_t atomic_int_initials[2] = {0, 0};
+int32_t int_initials[2] = {0, 0};
 const char *atomic_int_names[2] = {"x", "y"};
 const char *int_names[2] = {"0:r0", "1:r0"};
 struct manifest manifest = {
     .n_threads = 2,
-    .n_atomic_ints = 2,
-    .atomic_int_initials = atomic_int_initials,
-    .atomic_int_names = atomic_int_names,
-    .n_ints = 2,
-    .int_initials = int_initials,
-    .int_names = int_names,
+    .n_atomic_int32        = 2,
+    .atomic_int32_initials = atomic_int_initials,
+    .atomic_int32_names    = atomic_int_names,
+    .n_int32               = 2,
+    .int32_initials        = int_initials,
+    .int32_names           = int_names,
 };
 
 /* phenolphthalein doesn't call the threads directly, but instead calls this
@@ -65,10 +66,10 @@ test(size_t tid, struct env *e)
 bool
 check(const struct env *e)
 {
-    int x = _x(e);
-    int y = _y(e);
-    int t0r0 = _0_r0(e);
-    int t1r0 = _1_r0(e);
+    int32_t x = _x(e);
+    int32_t y = _y(e);
+    int32_t t0r0 = _0_r0(e);
+    int32_t t1r0 = _1_r0(e);
 
     if (x == 1 && y == 1 && t0r0 == 0 && t1r0 == 0) return true;
     if (x == 1 && y == 1 && t0r0 == 0 && t1r0 == 1) return true;

@@ -56,19 +56,19 @@ pub trait Env: Sized + Clone {
     /// Constructs an environment for the given manifest.
     fn for_manifest(m: &model::manifest::Manifest) -> err::Result<Self>;
 
-    /// Gets the atomic integer in slot i.
+    /// Gets the atomic 32-bit integer in slot i.
     /// Assumes that the implementation does range checking and returns a
     /// valid but undefined result if i is out of bounds.
-    fn atomic_int(&self, i: usize) -> i32;
+    fn get_atomic_i32(&self, i: usize) -> i32;
 
-    /// Gets the integer in slot i.
+    /// Gets the non-atomic 32-bit integer in slot i.
     /// Assumes that the implementation does range checking and returns a
     /// valid but undefined result if i is out of bounds.
-    fn int(&self, i: usize) -> i32;
+    fn get_i32(&self, i: usize) -> i32;
 
-    /// Sets the atomic integer in slot i to value v.
-    fn set_atomic_int(&mut self, i: usize, v: i32);
+    /// Sets the atomic 32-bit integer in slot i to value v.
+    fn set_atomic_i32(&mut self, i: usize, v: i32);
 
-    /// Sets the integer in slot i to value v.
-    fn set_int(&mut self, i: usize, v: i32);
+    /// Sets the non-atomic 32-bit integer in slot i to value v.
+    fn set_i32(&mut self, i: usize, v: i32);
 }

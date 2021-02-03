@@ -71,8 +71,8 @@ impl Observer {
 fn current_state<T: abs::Env>(env: &Manifested<T>) -> model::obs::State {
     let mut s = model::obs::State::new();
     // TODO(@MattWindsor91): have one great big iterator for values and collect it.
-    s.extend(env.atomic_int_values());
-    s.extend(env.int_values());
+    s.extend(env.atomic_i32_values());
+    s.extend(env.i32_values());
     s
 }
 
@@ -103,26 +103,26 @@ impl<'a, T: abs::Env> Manifested<'a, T> {
     /// Resets the environment to the initial values in the manifest.
     pub fn reset(&mut self) {
         for (i, (_, r)) in self.manifest.atomic_ints.iter().enumerate() {
-            self.env.set_atomic_int(i, r.initial_value.unwrap_or(0))
+            self.env.set_atomic_i32(i, r.initial_value.unwrap_or(0))
         }
         for (i, (_, r)) in self.manifest.ints.iter().enumerate() {
-            self.env.set_int(i, r.initial_value.unwrap_or(0))
+            self.env.set_i32(i, r.initial_value.unwrap_or(0))
         }
     }
 
     // Iterates over all of the atomic integer variables in the environment.
-    pub fn atomic_int_values(&self) -> impl Iterator<Item = (String, i32)> + '_ {
+    pub fn atomic_i32_values(&self) -> impl Iterator<Item = (String, i32)> + '_ {
         self.manifest
             .atomic_int_names()
             .enumerate()
-            .map(move |(i, n)| (n.to_string(), self.env.atomic_int(i)))
+            .map(move |(i, n)| (n.to_string(), self.env.get_atomic_i32(i)))
     }
 
-    // Iterates over all of the integer variables in the environment.
-    pub fn int_values(&self) -> impl Iterator<Item = (String, i32)> + '_ {
+    // Iterates over all of the 32-bit integer variables in the environment.
+    pub fn i32_values(&self) -> impl Iterator<Item = (String, i32)> + '_ {
         self.manifest
             .int_names()
             .enumerate()
-            .map(move |(i, n)| (n.to_string(), self.env.int(i)))
+            .map(move |(i, n)| (n.to_string(), self.env.get_i32(i)))
     }
 }
