@@ -213,23 +213,23 @@ impl<T: Clone, E: Clone> Set<T, E> {
     /// handle.
     pub fn run<H>(
         self,
-        spawn: impl Fn(Ready<T, E>) -> H,
+        spawn: impl Fn(Ready<T, E>) -> err::Result<H>,
         join: fn(H) -> err::Result<Done>,
     ) -> err::Result<(halt::Type, Self)> {
         let vec = self.vec.clone();
 
-        // Collecting to force all handles to be produced before we join any
-        let handles = self.into_iter().map(spawn).collect::<Vec<H>>();
+        // Collecting to force all handles to be produced before we join any.
+        let handles = self.into_iter().map(spawn).collect::<Vec<err::Result<H>>>();
 
         // TODO(@MattWindsor91): the observations should only be visible from the environment once we've joined these threads
         // in general, all of the thread-unsafe stuff should be hidden inside the environment
-        let mut et = halt::Type::Exit;
+        let mut halt_type = halt::Type::Exit;
         for h in handles {
-            let done = join(h)?;
+            let done = join(h?)?;
             // These'll be the same, so it doesn't matter which we grab.
-            et = done.halt_type;
+            halt_type = done.halt_type;
         }
-        Ok((et, Set { vec }))
+        Ok((halt_type, Set { vec }))
     }
 
     /// Permutes the thread automata inside this set.

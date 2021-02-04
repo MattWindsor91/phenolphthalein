@@ -89,14 +89,12 @@ impl<'a, T: abs::Entry> Runner<T, T::Env, T::Checker> {
                     let thrd = thread::Thread::<T::Checker> {
                         shared: shared.clone(),
                     };
-                    builder.spawn(move |_| thrd.run(r.start())).unwrap()
+                    let handle = builder.spawn(move |_| thrd.run(r.start()))?;
+                    Ok(handle)
                 },
-                |h| {
-                    let x = h.join().unwrap();
-                    Ok(x)
-                },
+                |h| h.join().map_err(|_| err::Error::ThreadPanic),
             )
         })
-        .unwrap()
+        .map_err(|_| err::Error::ThreadPanic)?
     }
 }
