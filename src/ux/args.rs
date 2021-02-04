@@ -1,4 +1,5 @@
 use crate::{run, run::halt};
+use thiserror::Error;
 
 /// Name of the `Spinner` synchronisation method.
 pub const SYNC_SPINNER: &str = "spinner";
@@ -30,7 +31,7 @@ impl<'a> Args<'a> {
         // For now
         let nstr = matches.value_of("iterations").unwrap();
         let iterations = nstr.parse().map_err(Error::BadIterationCount)?;
-        let period = nstr.parse().map_err(Error::BadParseCount)?;
+        let period = nstr.parse().map_err(Error::BadPeriod)?;
 
         let sstr = matches.value_of("sync").unwrap();
         let sync = sstr.parse()?;
@@ -75,14 +76,17 @@ impl<'a> Args<'a> {
 }
 
 /// An argument-parsing error.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum Error {
     /// The user supplied the given string, which was a bad sync method.
+    #[error("unsupported sync method: {0}")]
     BadSyncMethod(String),
     /// The user supplied a bad iteration count.
+    #[error("couldn't parse iteration count: {0}")]
     BadIterationCount(std::num::ParseIntError),
-    /// The user supplied a bad parse count.
-    BadParseCount(std::num::ParseIntError),
+    /// The user supplied a bad period.
+    #[error("couldn't parse period: {0}")]
+    BadPeriod(std::num::ParseIntError),
 }
 type Result<T> = std::result::Result<T, Error>;
 
