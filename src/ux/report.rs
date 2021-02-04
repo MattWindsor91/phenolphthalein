@@ -5,8 +5,6 @@ use colored::Colorize;
 use std::{io, io::Write};
 use tabwriter::TabWriter;
 
-// TODO(@MattWindsor91): separate observer state and builder.
-
 /// Traits for things that dump final observer reports.
 pub trait Dumper {
     /// Dumps the report `r` into `W`, flushing and returning any I/O errors arising.

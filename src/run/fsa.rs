@@ -251,16 +251,16 @@ impl<T: abs::Entry> Set<T, T::Env> {
         sync: sync::Factory,
     ) -> err::Result<Self> {
         let mut env = T::Env::for_manifest(&manifest)?;
-        /* There is no obligation that the above environment has the correct
-        initial values. */
-        obs::Manifested {
-            env: &mut env,
-            manifest: &manifest,
-        }
-        .reset();
+        Self::init_state(&mut env, &manifest);
 
         let nth = manifest.n_threads;
         Ok(Self::new_with_env_and_sync(nth, entry, env, sync(nth)?))
+    }
+
+    fn init_state(env: &mut T::Env, manifest: &manifest::Manifest) {
+        /* There is no obligation that the above environment has the correct
+        initial values. */
+        obs::Manifested { env, manifest }.reset();
     }
 
     fn new_with_env_and_sync(
