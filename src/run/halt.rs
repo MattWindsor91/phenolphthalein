@@ -17,21 +17,20 @@ pub enum Condition {
 }
 
 impl Condition {
+    /// Constructs a halting condition that occurs when a callback is called.
+    pub fn on_callback(ty: Type) -> (Condition, impl FnMut()) {
+        let signal = Arc::new(AtomicBool::new(false));
+        let c = Self::OnSignal(signal.clone(), ty);
+        (c, move || signal.store(true, Ordering::Release))
+    }
+
     /// Gets the sort of exit, if any, that should occur given this condition
     /// and the most recent observation os.
     pub fn exit_type(&self, os: &obs::Summary) -> Option<Type> {
         match self {
-            Self::EveryNIterations(n, et) => exit_if(os.iterations % *n == 0, *et),
-            Self::OnSignal(s, et) => exit_if(s.load(Ordering::Acquire), *et),
+            Self::EveryNIterations(n, et) => et.exit_if(os.iterations % *n == 0),
+            Self::OnSignal(s, et) => et.exit_if(s.load(Ordering::Acquire)),
         }
-    }
-}
-
-fn exit_if(p: bool, ty: Type) -> Option<Type> {
-    if p {
-        Some(ty)
-    } else {
-        None
     }
 }
 
@@ -60,6 +59,14 @@ impl Type {
             1 => Some(Self::Rotate),
             2 => Some(Self::Exit),
             _ => None,
+        }
+    }
+
+    fn exit_if(self, p: bool) -> Option<Type> {
+        if p {
+            Some(self)
+        } else {
+            None
         }
     }
 }

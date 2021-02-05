@@ -3,11 +3,6 @@ extern crate clap;
 
 use std::io;
 
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
-
 use phenolphthalein::{
     model, run,
     testapi::{abs::Test, c},
@@ -99,8 +94,7 @@ fn dump_report<W: io::Write>(w: W, r: model::obs::Report) -> anyhow::Result<()> 
 }
 
 fn setup_ctrlc() -> anyhow::Result<run::halt::Condition> {
-    let sigb = Arc::new(AtomicBool::new(false));
-    let c = run::halt::Condition::OnSignal(sigb.clone(), run::halt::Type::Exit);
-    ctrlc::set_handler(move || sigb.store(true, Ordering::Release))?;
-    Ok(c)
+    let (condition, callback) = run::halt::Condition::on_callback(run::halt::Type::Exit);
+    ctrlc::set_handler(callback)?;
+    Ok(condition)
 }
