@@ -47,20 +47,14 @@ impl<'a> Args<'a> {
         })
     }
 
-    /// Gets the run conditions requested in this argument set.
-    pub fn conds(&self) -> Vec<halt::Condition> {
+    /// Gets the halting rules requested in this argument set.
+    pub fn halt_rules(&self) -> Vec<halt::Rule> {
         let mut v = Vec::with_capacity(3);
         if self.iterations != 0 {
-            v.push(halt::Condition::EveryNIterations(
-                self.iterations,
-                run::halt::Type::Exit,
-            ))
+            v.push(halt::Condition::EveryNIterations(self.iterations).exit())
         }
         if 0 < self.period && self.period < self.iterations {
-            v.push(halt::Condition::EveryNIterations(
-                self.period,
-                run::halt::Type::Rotate,
-            ))
+            v.push(halt::Condition::EveryNIterations(self.period).rotate())
         }
         v
     }

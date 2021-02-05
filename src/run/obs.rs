@@ -42,18 +42,24 @@ impl Observer {
     ) -> model::obs::Obs {
         let state = current_state(env);
         let info = self.obs.get(&state).map_or_else(
-            || {
-                let check_result = checker.check(env.env);
-                model::obs::Obs {
-                    occurs: 1,
-                    check_result,
-                    iteration: self.iterations,
-                }
-            },
+            || self.observe_state_for_first_time(env.env, checker),
             model::obs::Obs::inc,
         );
         self.obs.insert(state, info);
         info
+    }
+
+    fn observe_state_for_first_time<T: abs::Env, C: abs::Checker<Env = T>>(
+        &self,
+        env: &T,
+        checker: &C,
+    ) -> model::obs::Obs {
+        let check_result = checker.check(env);
+        model::obs::Obs {
+            occurs: 1,
+            check_result,
+            iteration: self.iterations,
+        }
     }
 
     /// Consumes this Observer and returns a summary of its state.

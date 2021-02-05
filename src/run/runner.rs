@@ -5,8 +5,8 @@ use crate::{err, model, testapi::abs};
 use std::sync::{Arc, Mutex};
 
 pub struct Builder<T> {
-    /// The exit conditions that should be applied to tests run by this runner.
-    pub conds: Vec<halt::Condition>,
+    /// The halting rules that should be applied to tests run by this runner.
+    pub halt_rules: Vec<halt::Rule>,
 
     /// The factory function to use to construct synchronisation.
     pub sync: sync::Factory,
@@ -39,7 +39,7 @@ impl<'a, T: abs::Entry> Builder<T> {
     ) -> err::Result<Arc<Mutex<shared::State<T::Checker>>>> {
         let observer = obs::Observer::new();
         let shin = shared::State {
-            conds: self.conds.clone(),
+            halt_rules: self.halt_rules.clone(),
             observer,
             checker: self.entry.checker(),
             manifest,

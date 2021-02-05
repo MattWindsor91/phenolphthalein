@@ -11,8 +11,8 @@ use crate::{model, testapi::abs};
 pub struct State<C> {
     /// The state checker for the test.
     pub checker: C,
-    /// The halt conditions for the test.
-    pub conds: Vec<halt::Condition>,
+    /// The halt rules for the test.
+    pub halt_rules: Vec<halt::Rule>,
     /// The observer for the test.
     pub observer: obs::Observer,
     /// The manifest for the test.
@@ -33,7 +33,7 @@ impl<C: abs::Checker> State<C> {
 
     /// Checks whether the test should exit now.
     pub fn exit_type(&self, summary: obs::Summary) -> Option<halt::Type> {
-        self.conds
+        self.halt_rules
             .iter()
             .filter_map(|c| c.exit_type(&summary))
             .max()

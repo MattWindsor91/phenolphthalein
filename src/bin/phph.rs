@@ -70,13 +70,13 @@ fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
 fn run_with_args(args: ux::args::Args) -> anyhow::Result<()> {
     let test = c::Test::load(args.input)?;
 
-    let mut conds = args.conds();
-    conds.push(setup_ctrlc()?);
+    let mut halt_rules = args.halt_rules();
+    halt_rules.push(setup_ctrlc()?);
 
     let sync = args.sync_factory();
 
     let mut runner = run::Builder {
-        conds,
+        halt_rules,
         sync,
         entry: test.spawn(),
         permute_threads: args.permute_threads,
@@ -93,8 +93,8 @@ fn dump_report<W: io::Write>(w: W, r: model::obs::Report) -> anyhow::Result<()> 
     Ok(())
 }
 
-fn setup_ctrlc() -> anyhow::Result<run::halt::Condition> {
-    let (condition, callback) = run::halt::Condition::on_callback(run::halt::Type::Exit);
+fn setup_ctrlc() -> anyhow::Result<run::halt::Rule> {
+    let (rule, callback) = run::halt::Rule::on_callback(run::halt::Type::Exit);
     ctrlc::set_handler(callback)?;
-    Ok(condition)
+    Ok(rule)
 }
