@@ -23,7 +23,7 @@ impl Rule {
         (cond.halt_with(ty), cb)
     }
 
-    /// gets the sort of exit, if any, that should occur given this condition
+    /// Gets the sort of exit, if any, that should occur given this condition
     /// and the most recent observation os.
     pub fn exit_type(&self, os: &obs::Summary) -> Option<Type> {
         self.halt_type.exit_if(self.condition.check(os))

@@ -97,3 +97,30 @@ impl Env {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::testapi::abs::Env;
+
+    #[test]
+    /// Tests storing and loading a 32-bit atomic integer.
+    fn test_store_load_atomic_i32() {
+        let mut env = super::Env::new(1, 0).unwrap();
+        let env2 = env.clone();
+        assert_eq!(0, env.get_atomic_i32(0));
+        env.set_atomic_i32(0, 42);
+        assert_eq!(42, env.get_atomic_i32(0));
+        assert_eq!(42, env2.get_atomic_i32(0))
+    }
+
+    #[test]
+    /// Tests storing and loading a 32-bit integer.
+    fn test_store_load_i32() {
+        let mut env = super::Env::new(0, 1).unwrap();
+        let env2 = env.clone();
+        assert_eq!(0, env.get_i32(0));
+        env.set_i32(0, 42);
+        assert_eq!(42, env.get_i32(0));
+        assert_eq!(42, env2.get_i32(0))
+    }
+}
