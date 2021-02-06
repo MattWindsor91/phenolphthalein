@@ -81,7 +81,7 @@ impl Condition {
 /// Enumeration of ways the test can be halted.
 ///
 /// `Type`s are ordered such that exiting is 'greater than' rotating.
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Type {
     /// The test's threads should be torn down and reset.
     Rotate,

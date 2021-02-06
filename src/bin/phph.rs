@@ -13,7 +13,14 @@ use phenolphthalein::{
 use clap::{App, Arg};
 
 fn main() {
-    let phenolphalein = App::new("phenolphthalein")
+    if let Err(e) = run(app().get_matches()) {
+        eprintln!("{:#}", e);
+        std::process::exit(1)
+    }
+}
+
+fn app<'a, 'b>() -> App<'a, 'b> {
+    App::new("phenolphthalein")
         .author(crate_authors!())
         .version(crate_version!())
         .about("Concurrency test runner")
@@ -22,6 +29,12 @@ fn main() {
                 .help("Don't permute thread assignments each period")
                 .short("-P")
                 .long("--no-permute-threads"),
+        )
+        .arg(
+            Arg::with_name("no_check")
+                .help("Disable all checking of states")
+                .short("-C")
+                .long("--no-check")
         )
         .arg(
             Arg::with_name("sync")
@@ -33,7 +46,7 @@ fn main() {
                 .possible_values(ux::args::SYNC_ALL),
         )
         .arg(
-            Arg::with_name("iterations")
+            Arg::with_name(ux::args::ARG_ITERATIONS)
                 .help("Iterations to perform in total")
                 .short("-i")
                 .long("--iterations")
@@ -41,26 +54,19 @@ fn main() {
                 .default_value("100000"),
         )
         .arg(
-            Arg::with_name("period")
+            Arg::with_name(ux::args::ARG_PERIOD)
                 .help("rotate threads after each NUM iterations")
                 .short("-p")
                 .long("--period")
                 .value_name("NUM")
-                .takes_value(true)
                 .default_value("10000"),
         )
         .arg(
-            Arg::with_name("INPUT")
+            Arg::with_name(ux::args::ARG_INPUT)
                 .help("The input file (.so, .dylib) to use")
                 .required(true)
                 .index(1),
-        );
-
-    let matches = phenolphalein.get_matches();
-    if let Err(e) = run(matches) {
-        eprintln!("{:#}", e);
-        std::process::exit(1)
-    }
+        )
 }
 
 fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
@@ -79,6 +85,7 @@ fn run_with_args(args: ux::args::Args) -> anyhow::Result<()> {
         halt_rules,
         sync,
         entry: test.spawn(),
+        check: args.check,
         permute_threads: args.permute_threads,
     }
     .build()?;

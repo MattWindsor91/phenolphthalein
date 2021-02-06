@@ -179,6 +179,10 @@ impl<T, E> Inner<T, E> {
             state: Arc::new(AtomicU8::new(0)),
         }
     }
+
+    fn set_state(&self, state: Option<halt::Type>) {
+        self.state.store(state.map(halt::Type::to_u8).unwrap_or(0), Ordering::Release);
+    }
 }
 
 impl<T: Clone, E: Clone> Inner<T, E> {
@@ -216,20 +220,9 @@ impl<T: Clone, E: Clone> Set<T, E> {
         spawn: impl Fn(Ready<T, E>) -> err::Result<H>,
         join: fn(H) -> err::Result<Done>,
     ) -> err::Result<(halt::Type, Self)> {
-        let vec = self.vec.clone();
-
-        // Collecting to force all handles to be produced before we join any.
-        let handles = self.into_iter().map(spawn).collect::<Vec<err::Result<H>>>();
-
         // TODO(@MattWindsor91): the observations should only be visible from the environment once we've joined these threads
         // in general, all of the thread-unsafe stuff should be hidden inside the environment
-        let mut halt_type = halt::Type::Exit;
-        for h in handles {
-            let done = join(h?)?;
-            // These'll be the same, so it doesn't matter which we grab.
-            halt_type = done.halt_type;
-        }
-        Ok((halt_type, Set { vec }))
+        Ok((join_all(self.spawn_all(spawn), join)?, self.reset()))
     }
 
     /// Permutes the thread automata inside this set.
@@ -237,7 +230,35 @@ impl<T: Clone, E: Clone> Set<T, E> {
         let v = &mut self.vec[..];
         v.shuffle(rng);
     }
+
+    /// Makes a ready state for every thread in this set, and uses `spawn` to
+    /// spawn a threadlike object with handle type `H`.
+    /// 
+    /// Ensures each thread will be spawned before returning.
+    fn spawn_all<H>(&self, spawn: impl Fn(Ready<T, E>) -> err::Result<H>) -> Vec<err::Result<H>> {
+        self.vec.clone().into_iter().map(|i| spawn(Ready(i))).collect()
+    }
+
+    /// Prepares this set for potentially being re-run.
+    fn reset(self) -> Self {
+        if let Some(inner) = self.vec.first() {
+            inner.set_state(None);
+        }
+        self
+    }
 }
+
+fn join_all<H>(handles: Vec<err::Result<H>>, join: fn(H) -> err::Result<Done>) -> err::Result<halt::Type> {
+    let mut halt_type = halt::Type::Exit;
+    for h in handles {
+        let done = join(h?)?;
+        // These'll be the same, so it doesn't matter which we grab.
+        halt_type = done.halt_type;
+    }
+    Ok(halt_type)
+}
+
+
 
 impl<'a, T: abs::Entry<'a>> Set<T, T::Env> {
     /// Constructs a `Set` from a test entry point and its associated manifest.
@@ -279,34 +300,5 @@ impl<'a, T: abs::Entry<'a>> Set<T, T::Env> {
         }
         automata.vec.push(inner);
         automata
-    }
-}
-
-/// We can consume a Set into an iterator over Ready FSA handles.
-impl<T, E> IntoIterator for Set<T, E> {
-    type Item = Ready<T, E>;
-
-    type IntoIter = SetIter<T, E>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        SetIter(self.vec.into_iter().map(Ready))
-    }
-}
-
-/// Type alias of taking `Ready` as a function.
-type Readier<T, E> = fn(Inner<T, E>) -> Ready<T, E>;
-
-/// Iterator produced by iterating on `Set`s.
-pub struct SetIter<T, E>(
-    // This mainly just exists so that we don't leak `Inner`, which we would
-    // do if we set this to a type alias.
-    std::iter::Map<std::vec::IntoIter<Inner<T, E>>, Readier<T, E>>,
-);
-
-impl<T, E> Iterator for SetIter<T, E> {
-    type Item = Ready<T, E>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
     }
 }

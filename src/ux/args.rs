@@ -1,6 +1,19 @@
 use crate::{run, run::halt};
 use thiserror::Error;
 
+/// Name of the input file argument.
+pub const ARG_INPUT: &str = "INPUT";
+/// Name of the `no-permute-threads` argument.
+pub const ARG_NO_PERMUTE_THREADS: &str = "no_permute_threads";
+/// Name of the `no-check` argument.
+pub const ARG_NO_CHECK: &str = "no_check";
+/// Name of the `sync` argument.
+pub const ARG_SYNC: &str = "sync";
+/// Name of the `iterations` argument.
+pub const ARG_ITERATIONS: &str = "iterations";
+/// Name of the `period` argument.
+pub const ARG_PERIOD: &str = "period";
+
 /// Name of the `Spinner` synchronisation method.
 pub const SYNC_SPINNER: &str = "spinner";
 /// Name of the `Barrier` synchronisation method.
@@ -19,6 +32,9 @@ pub struct Args<'a> {
     pub iterations: usize,
     /// The parsed thread swap period.
     pub period: usize,
+    /// Whether state postcondition checks should be enabled.
+    /// (This may or may not be a negative flag in the actual clap parser.)
+    pub check: bool,
     /// Whether threads should be permuted.
     /// (This may or may not be a negative flag in the actual clap parser.)
     pub permute_threads: bool,
@@ -27,22 +43,25 @@ pub struct Args<'a> {
 impl<'a> Args<'a> {
     /// Parses an argument set from a clap match dictionary.
     pub fn parse(matches: &'a clap::ArgMatches) -> Result<Self> {
-        let input = matches.value_of("INPUT").unwrap();
-        // For now
-        let nstr = matches.value_of("iterations").unwrap();
-        let iterations = nstr.parse().map_err(Error::BadIterationCount)?;
-        let period = nstr.parse().map_err(Error::BadPeriod)?;
+        let input = matches.value_of(ARG_INPUT).unwrap();
 
-        let sstr = matches.value_of("sync").unwrap();
+        let nstr = matches.value_of(ARG_ITERATIONS).unwrap();
+        let iterations = nstr.parse().map_err(Error::BadIterationCount)?;
+        let pstr = matches.value_of(ARG_PERIOD).unwrap();
+        let period = pstr.parse().map_err(Error::BadPeriod)?;
+
+        let sstr = matches.value_of(ARG_SYNC).unwrap();
         let sync = sstr.parse()?;
 
-        let permute_threads = !matches.is_present("no_permute_threads");
+        let check = !matches.is_present(ARG_NO_CHECK);
+        let permute_threads = !matches.is_present(ARG_NO_PERMUTE_THREADS);
 
         Ok(Self {
             input,
             iterations,
             period,
             sync,
+            check,
             permute_threads,
         })
     }

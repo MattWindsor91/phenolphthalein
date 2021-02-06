@@ -4,7 +4,10 @@ use super::{fsa, fsa::Fsa, halt, obs, shared, sync, thread};
 use crate::{err, model, testapi::abs};
 use std::sync::{Arc, Mutex};
 
+/// A builder for tests.
 pub struct Builder<T> {
+    // TODO(@MattWindsor91): use the actual builder pattern here.
+
     /// The halting rules that should be applied to tests run by this runner.
     pub halt_rules: Vec<halt::Rule>,
 
@@ -14,12 +17,15 @@ pub struct Builder<T> {
     /// A cloneable entry into the test.
     pub entry: T,
 
+    /// Whether we should enable state checking.
+    pub check: bool,
+
     /// Whether we should permute threads at each thread rotation.
     pub permute_threads: bool,
 }
 
 impl<'a, T: abs::Entry<'a>> Builder<T> {
-    pub fn build(&self) -> err::Result<Runner<'a, T, T::Env>> {
+    pub fn build(self) -> err::Result<Runner<'a, T, T::Env>> {
         let manifest = self.entry.make_manifest()?;
         let shared = self.make_shared_state(manifest.clone())?;
         let rng = rand::thread_rng();
@@ -41,10 +47,18 @@ impl<'a, T: abs::Entry<'a>> Builder<T> {
         let shin = shared::State {
             halt_rules: self.halt_rules.clone(),
             observer,
-            checker: self.entry.checker(),
+            checker: self.make_checker(),
             manifest,
         };
         Ok(Arc::new(Mutex::new(shin)))
+    }
+
+    fn make_checker(&self) -> Box<dyn model::check::Checker<T::Env> + 'a> {
+        if self.check {
+            self.entry.checker()
+        } else {
+            Box::new(model::check::Outcome::Unknown)
+        }
     }
 }
 
