@@ -18,8 +18,8 @@ pub struct Builder<T> {
     pub permute_threads: bool,
 }
 
-impl<'a, T: abs::Entry> Builder<T> {
-    pub fn build(&self) -> err::Result<Runner<T, T::Env, T::Checker>> {
+impl<'a, T: abs::Entry<'a>> Builder<T> {
+    pub fn build(&self) -> err::Result<Runner<'a, T, T::Env>> {
         let manifest = self.entry.make_manifest()?;
         let shared = self.make_shared_state(manifest.clone())?;
         let rng = rand::thread_rng();
@@ -36,7 +36,7 @@ impl<'a, T: abs::Entry> Builder<T> {
     fn make_shared_state(
         &self,
         manifest: model::manifest::Manifest,
-    ) -> err::Result<Arc<Mutex<shared::State<T::Checker>>>> {
+    ) -> err::Result<Arc<Mutex<shared::State<'a, T::Env>>>> {
         let observer = obs::Observer::new();
         let shin = shared::State {
             halt_rules: self.halt_rules.clone(),
@@ -48,14 +48,14 @@ impl<'a, T: abs::Entry> Builder<T> {
     }
 }
 
-pub struct Runner<T, E, C> {
+pub struct Runner<'a, T, E> {
     automata: Option<fsa::Set<T, E>>,
-    shared: Arc<Mutex<shared::State<C>>>,
+    shared: Arc<Mutex<shared::State<'a, E>>>,
     permute_threads: bool,
     rng: rand::prelude::ThreadRng,
 }
 
-impl<'a, T: abs::Entry> Runner<T, T::Env, T::Checker> {
+impl<'a, T: abs::Entry<'a>> Runner<'a, T, T::Env> {
     /// Runs the Runner's test until it exits.
     pub fn run(&mut self) -> err::Result<()> {
         while let Some(mut am) = self.automata.take() {
@@ -79,14 +79,14 @@ impl<'a, T: abs::Entry> Runner<T, T::Env, T::Checker> {
 
     fn run_rotation(
         &self,
-        shared: Arc<Mutex<shared::State<T::Checker>>>,
+        shared: Arc<Mutex<shared::State<'a, T::Env>>>,
         automata: fsa::Set<T, T::Env>,
     ) -> err::Result<(halt::Type, fsa::Set<T, T::Env>)> {
         crossbeam::thread::scope(|s| {
             automata.run(
                 |r: fsa::Ready<T, T::Env>| {
                     let builder = s.builder().name(format!("P{0}", r.tid()));
-                    let thrd = thread::Thread::<T::Checker> {
+                    let thrd = thread::Thread::<'a, T::Env> {
                         shared: shared.clone(),
                     };
                     let handle = builder.spawn(move |_| thrd.run(r.start()))?;

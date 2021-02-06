@@ -9,25 +9,17 @@ use crate::{err, model};
 /// Each test can spawn multiple entry points into itself.
 pub trait Test<'a> {
     /// The type of entry point into the test.
-    type Entry: Entry;
+    type Entry: Entry<'a>;
 
     /// Spawns a new entry point into the test.
     fn spawn(&self) -> Self::Entry;
 }
 
 /// Trait of cloneable entry points into tests.
-pub trait Entry: Clone {
-    /* NOTE(@MattWindsor91): this will likely need a lifetime adding to it
-    eventually; I think its lack of one thus far is a quirk of how
-    dlopen Containers manage lifetimes. */
-
+pub trait Entry<'a>: Clone {
     /// Every test entry has an associated environment type, which implements
     /// a fairly basic API for inspection and resetting.
-    type Env: Env;
-
-    /// Test entries must also have an associated checker type, for checking
-    /// environments uphold test conditions.
-    type Checker: Checker<Env = Self::Env>;
+    type Env: Env + 'a;
 
     /// Makes a manifest using information taken from the test entry point.
     fn make_manifest(&self) -> err::Result<model::manifest::Manifest>;
@@ -36,16 +28,13 @@ pub trait Entry: Clone {
     fn run(&self, tid: usize, e: &mut Self::Env);
 
     /// Gets a checker for this entry point's environments.
-    fn checker(&self) -> Self::Checker;
+    fn checker(&self) -> Box<dyn Checker<Self::Env> + 'a>;
 }
 
 /// Type of functions that can check an environment.
-pub trait Checker: Sync + Send + Clone {
-    // The type of the environment this checker checks.
-    type Env: Env;
-
+pub trait Checker<E>: Sync + Send {
     /// Checks the current state of the environment.
-    fn check(&self, env: &Self::Env) -> model::check::Outcome;
+    fn check(&self, env: &E) -> model::check::Outcome;
 }
 
 /// Trait of medium-level handles to an observable test environment.

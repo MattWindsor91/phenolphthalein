@@ -59,7 +59,7 @@ impl<T, E> Fsa for Runnable<T, E> {
     }
 }
 
-impl<T: abs::Entry> Runnable<T, T::Env> {
+impl<'a, T: abs::Entry<'a>> Runnable<T, T::Env> {
     /// Runs another iteration of this FSA's thread body.
     pub fn run(mut self) -> RunOutcome<T, T::Env> {
         if let Some(halt_type) = self.halt_type() {
@@ -239,7 +239,7 @@ impl<T: Clone, E: Clone> Set<T, E> {
     }
 }
 
-impl<T: abs::Entry> Set<T, T::Env> {
+impl<'a, T: abs::Entry<'a>> Set<T, T::Env> {
     /// Constructs a `Set` from a test entry point and its associated manifest.
     ///
     /// This function relies on the manifest and entry point matching up; it

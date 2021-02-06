@@ -18,19 +18,16 @@ pub struct Checker<'a> {
     sym: Option<Symbol<'a, unsafe extern "C" fn(env: *const env::UnsafeEnv) -> bool>>,
 }
 
-impl<'a> abs::Checker for Checker<'a> {
-    type Env = env::Env;
-
-    fn check(&self, e: &Self::Env) -> model::check::Outcome {
+impl<'a> abs::Checker<env::Env> for Checker<'a> {
+    fn check(&self, e: &env::Env) -> model::check::Outcome {
         self.sym
             .map(|sym| model::check::Outcome::from_pass_bool(unsafe { (sym)(e.p) }))
             .unwrap_or(model::check::Outcome::Unknown)
     }
 }
 
-impl<'a> abs::Entry for Entry<'a> {
+impl<'a> abs::Entry<'a> for Entry<'a> {
     type Env = env::Env;
-    type Checker = Checker<'a>;
 
     fn run(&self, tid: usize, e: &mut Self::Env) {
         unsafe { (self.test)(tid, e.p) }
@@ -41,8 +38,8 @@ impl<'a> abs::Entry for Entry<'a> {
     }
 
     /// Gets a checker for this test.
-    fn checker(&self) -> Self::Checker {
-        Checker { sym: self.check }
+    fn checker(&self) -> Box<dyn abs::Checker<Self::Env> + 'a> {
+        Box::new(Checker { sym: self.check })
     }
 }
 

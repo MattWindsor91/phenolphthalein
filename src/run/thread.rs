@@ -9,14 +9,14 @@ use std::sync::{Arc, Mutex};
 /// Perhaps strangely, this is parametrised over the checker type of the test
 /// API (it needs access only to the checker and its underlying environment
 /// type).  This may change in future.
-pub struct Thread<C> {
-    pub shared: Arc<Mutex<shared::State<C>>>,
+pub struct Thread<'a, E> {
+    pub shared: Arc<Mutex<shared::State<'a, E>>>,
 }
 
-impl<C: abs::Checker> Thread<C> {
-    pub fn run<T>(&self, t: fsa::Runnable<T, C::Env>) -> fsa::Done
+impl<'a, E: abs::Env> Thread<'a, E> {
+    pub fn run<T>(&self, t: fsa::Runnable<T, E>) -> fsa::Done
     where
-        T: abs::Entry<Env = C::Env>,
+        T: abs::Entry<'a, Env = E>,
     {
         let mut t = t;
         loop {
@@ -28,7 +28,7 @@ impl<C: abs::Checker> Thread<C> {
         }
     }
 
-    fn observe<T>(&self, mut o: fsa::Observable<T, C::Env>) -> fsa::Runnable<T, C::Env> {
+    fn observe<T>(&self, mut o: fsa::Observable<T, E>) -> fsa::Runnable<T, E> {
         if let Some(exit_type) = self.handle_env(o.env()) {
             o.kill(exit_type)
         } else {
@@ -36,7 +36,7 @@ impl<C: abs::Checker> Thread<C> {
         }
     }
 
-    fn handle_env(&self, env: &mut C::Env) -> Option<halt::Type> {
+    fn handle_env(&self, env: &mut E) -> Option<halt::Type> {
         // TODO(@MattWindsor91): handle poisoning here
         let mut s = self.shared.lock().unwrap();
         s.handle(env)
