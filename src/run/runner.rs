@@ -7,7 +7,6 @@ use std::sync::{Arc, Mutex};
 /// A builder for tests.
 pub struct Builder<T> {
     // TODO(@MattWindsor91): use the actual builder pattern here.
-
     /// The halting rules that should be applied to tests run by this runner.
     pub halt_rules: Vec<halt::Rule>,
 

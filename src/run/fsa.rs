@@ -135,7 +135,7 @@ impl<T, E> Observable<T, E> {
     pub fn kill(self, state: halt::Type) -> Runnable<T, E> {
         /* TODO(@MattWindsor91): maybe return Done here, and mock up waiting
         on the final barrier, or return Waiting<Done> somehow. */
-        self.0.state.store(state.to_u8(), Ordering::Release);
+        self.0.set_state(Some(state));
         self.relinquish()
     }
 }
@@ -181,7 +181,8 @@ impl<T, E> Inner<T, E> {
     }
 
     fn set_state(&self, state: Option<halt::Type>) {
-        self.state.store(state.map(halt::Type::to_u8).unwrap_or(0), Ordering::Release);
+        self.state
+            .store(state.map(halt::Type::to_u8).unwrap_or(0), Ordering::Release);
     }
 }
 
@@ -233,14 +234,21 @@ impl<T: Clone, E: Clone> Set<T, E> {
 
     /// Makes a ready state for every thread in this set, and uses `spawn` to
     /// spawn a threadlike object with handle type `H`.
-    /// 
+    ///
     /// Ensures each thread will be spawned before returning.
     fn spawn_all<H>(&self, spawn: impl Fn(Ready<T, E>) -> err::Result<H>) -> Vec<err::Result<H>> {
-        self.vec.clone().into_iter().map(|i| spawn(Ready(i))).collect()
+        self.vec
+            .clone()
+            .into_iter()
+            .map(|i| spawn(Ready(i)))
+            .collect()
     }
 
     /// Prepares this set for potentially being re-run.
     fn reset(self) -> Self {
+        // If we don't do this, and we just rotated out of a test iteration,
+        // then threads will spawn, immediately think they need to rotate again,
+        // and fail to advance.
         if let Some(inner) = self.vec.first() {
             inner.set_state(None);
         }
@@ -248,7 +256,10 @@ impl<T: Clone, E: Clone> Set<T, E> {
     }
 }
 
-fn join_all<H>(handles: Vec<err::Result<H>>, join: fn(H) -> err::Result<Done>) -> err::Result<halt::Type> {
+fn join_all<H>(
+    handles: Vec<err::Result<H>>,
+    join: fn(H) -> err::Result<Done>,
+) -> err::Result<halt::Type> {
     let mut halt_type = halt::Type::Exit;
     for h in handles {
         let done = join(h?)?;
@@ -257,8 +268,6 @@ fn join_all<H>(handles: Vec<err::Result<H>>, join: fn(H) -> err::Result<Done>) -
     }
     Ok(halt_type)
 }
-
-
 
 impl<'a, T: abs::Entry<'a>> Set<T, T::Env> {
     /// Constructs a `Set` from a test entry point and its associated manifest.

@@ -34,7 +34,7 @@ fn app<'a, 'b>() -> App<'a, 'b> {
             Arg::with_name("no_check")
                 .help("Disable all checking of states")
                 .short("-C")
-                .long("--no-check")
+                .long("--no-check"),
         )
         .arg(
             Arg::with_name("sync")
