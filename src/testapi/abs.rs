@@ -48,7 +48,7 @@ pub trait Checker: Sync + Send + Clone {
     fn check(&self, env: &Self::Env) -> model::check::Outcome;
 }
 
-/// Trait of handles to an observable test environment.
+/// Trait of medium-level handles to an observable test environment.
 ///
 /// This trait currently mainly exists to hide parts of the actual environment
 /// that aren't thread-safe to run, but may be more useful later on.
