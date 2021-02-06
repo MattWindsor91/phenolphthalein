@@ -28,13 +28,7 @@ pub trait Entry<'a>: Clone {
     fn run(&self, tid: usize, e: &mut Self::Env);
 
     /// Gets a checker for this entry point's environments.
-    fn checker(&self) -> Box<dyn Checker<Self::Env> + 'a>;
-}
-
-/// Type of functions that can check an environment.
-pub trait Checker<E>: Sync + Send {
-    /// Checks the current state of the environment.
-    fn check(&self, env: &E) -> model::check::Outcome;
+    fn checker(&self) -> Box<dyn model::check::Checker<Self::Env> + 'a>;
 }
 
 /// Trait of medium-level handles to an observable test environment.

@@ -10,7 +10,7 @@ use crate::{model, testapi::abs};
 /// observers.
 pub struct State<'a, E> {
     /// The state checker for the test.
-    pub checker: Box<dyn abs::Checker<E> + 'a>,
+    pub checker: Box<dyn model::check::Checker<E> + 'a>,
     /// The halt rules for the test.
     pub halt_rules: Vec<halt::Rule>,
     /// The observer for the test.

@@ -15,14 +15,12 @@ pub struct Entry<'a> {
 /// A checker for C-ABI test environments.
 #[derive(Clone)]
 pub struct Checker<'a> {
-    sym: Option<Symbol<'a, unsafe extern "C" fn(env: *const env::UnsafeEnv) -> bool>>,
+    sym: Symbol<'a, unsafe extern "C" fn(env: *const env::UnsafeEnv) -> bool>,
 }
 
-impl<'a> abs::Checker<env::Env> for Checker<'a> {
+impl<'a> model::check::Checker<env::Env> for Checker<'a> {
     fn check(&self, e: &env::Env) -> model::check::Outcome {
-        self.sym
-            .map(|sym| model::check::Outcome::from_pass_bool(unsafe { (sym)(e.p) }))
-            .unwrap_or(model::check::Outcome::Unknown)
+        model::check::Outcome::from_pass_bool(unsafe { (self.sym)(e.p) })
     }
 }
 
@@ -38,8 +36,12 @@ impl<'a> abs::Entry<'a> for Entry<'a> {
     }
 
     /// Gets a checker for this test.
-    fn checker(&self) -> Box<dyn abs::Checker<Self::Env> + 'a> {
-        Box::new(Checker { sym: self.check })
+    fn checker(&self) -> Box<dyn model::check::Checker<Self::Env> + 'a> {
+        if let Some(sym) = self.check {
+            Box::new(Checker { sym })
+        } else {
+            Box::new(model::check::Outcome::Unknown)
+        }
     }
 }
 

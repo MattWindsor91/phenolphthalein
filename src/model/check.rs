@@ -1,5 +1,14 @@
 //! Model types for checks.
 
+/// Trait of things that can check an environment.
+///
+/// Checkers are expected to be movable across thread boundaries, unlike
+/// `Fn(E) -> Outcome`.
+pub trait Checker<E>: Sync + Send {
+    /// Checks the current state of the environment.
+    fn check(&self, env: &E) -> Outcome;
+}
+
 /// The result of running a checker.
 ///
 /// Outcomes are ordered such that `max` on an iterator of outcomes will return
@@ -26,9 +35,16 @@ impl Outcome {
     }
 }
 
+/// `Outcome`s can be trivial `Checker`s; they always return themselves.
+impl<E> Checker<E> for Outcome {
+    fn check(&self, _env: &E) -> Outcome {
+        *self
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use super::Outcome;
+    use super::{Checker, Outcome};
 
     #[test]
     /// `max` of an empty iterator should return `None`.
@@ -63,5 +79,13 @@ mod test {
     fn test_max_unknown() {
         let v = vec![Outcome::Unknown, Outcome::Failed, Outcome::Passed];
         assert_eq!(v.into_iter().max(), Some(Outcome::Unknown))
+    }
+
+    #[test]
+    /// Outcomes return themselves when used as checks.
+    fn test_outcome_as_check() {
+        for x in [Outcome::Unknown, Outcome::Failed, Outcome::Passed].iter() {
+            assert_eq!(*x, x.check(&()))
+        }
     }
 }

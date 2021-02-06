@@ -25,7 +25,7 @@ impl Observer {
     pub fn observe<'a, E: abs::Env>(
         &mut self,
         env: &mut Manifested<E>,
-        checker: &'a dyn abs::Checker<E>,
+        checker: &'a dyn model::check::Checker<E>,
     ) -> Summary {
         let info = self.observe_state(env, checker);
         self.iterations = self.iterations.saturating_add(1);
@@ -38,7 +38,7 @@ impl Observer {
     fn observe_state<'a, E: abs::Env>(
         &mut self,
         env: &mut Manifested<E>,
-        checker: &'a dyn abs::Checker<E>,
+        checker: &'a dyn model::check::Checker<E>,
     ) -> model::obs::Obs {
         let state = current_state(env);
         let info = self.obs.get(&state).map_or_else(
@@ -52,7 +52,7 @@ impl Observer {
     fn observe_state_for_first_time<'a, E: abs::Env>(
         &self,
         env: &E,
-        checker: &'a dyn abs::Checker<E>,
+        checker: &'a dyn model::check::Checker<E>,
     ) -> model::obs::Obs {
         let check_result = checker.check(env);
         model::obs::Obs {
