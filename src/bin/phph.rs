@@ -81,18 +81,18 @@ fn run_with_args(args: ux::args::Args) -> anyhow::Result<()> {
 
     let sync = args.sync_factory();
 
-    let mut runner = run::Builder {
+    let report = run::Builder {
         halt_rules,
         sync,
         entry: test.spawn(),
         check: args.check,
         permute_threads: args.permute_threads,
     }
-    .build()?;
-    runner.run()?;
+    .build()?
+    .run()?;
 
     // TODO(@MattWindsor91): don't hardcode this
-    dump_report(std::io::stdout(), runner.into_report()?)
+    dump_report(std::io::stdout(), report)
 }
 
 fn dump_report<W: io::Write>(w: W, r: model::obs::Report) -> anyhow::Result<()> {

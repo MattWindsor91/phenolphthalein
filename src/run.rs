@@ -6,6 +6,5 @@ mod obs;
 pub mod runner;
 mod shared;
 pub mod sync;
-mod thread;
 
 pub use runner::{Builder, Runner};

@@ -8,19 +8,19 @@ use std::sync::{
 };
 
 /// Trait of things that can serve as thread synchronisers in the FSA.
-/// 
+///
 /// `Synchroniser` is an unsafe trait because there is a subtle invariant
 /// that must be satisfied for it to be usable by the FSA for synchronisation,
 /// and failure to satisfy it will result in unsafe behaviour by the FSA.
-/// 
+///
 /// The invariant is this: given several threads calling into the `Synchroniser`
 /// in the pattern [`run`, `obs` (if `run` true) or `wait` (`run` false)],
 /// then the `Synchroniser` must guarantee that, at any time:
-/// 
+///
 /// 1. either all threads are about to call `run`; or,
 /// 2. precisely one is about to call `obs` and the others are about to call
 ///   `wait`.
-/// 
+///
 /// This drives the FSA workflow that, at any point, all threads are either
 /// running the concurrent test, or have elected one thread to do the
 /// book-keeping for the results of that run while the others wait.
@@ -70,7 +70,7 @@ pub struct Spinner {
 
 impl Spinner {
     /// Constructs a new `Spinner` with room for `nthreads` threads.
-    /// 
+    ///
     /// A `Spinner` can only hold enough threads that fit inside an `isize`,
     /// for implementation reasons; the constructor will return an error if this
     /// is not the case.
@@ -122,7 +122,7 @@ unsafe impl Synchroniser for Spinner {
         } else {
             // We need to wait until the last thread gets here.
             while self.inner.load(Ordering::Acquire) <= 0 {
-               // busy wait
+                // busy wait
             }
         }
     }
