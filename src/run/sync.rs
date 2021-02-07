@@ -8,7 +8,28 @@ use std::sync::{
 };
 
 /// Trait of things that can serve as thread synchronisers in the FSA.
-pub trait Synchroniser {
+/// 
+/// `Synchroniser` is an unsafe trait because there is a subtle invariant
+/// that must be satisfied for it to be usable by the FSA for synchronisation,
+/// and failure to satisfy it will result in unsafe behaviour by the FSA.
+/// 
+/// The invariant is this: given several threads calling into the `Synchroniser`
+/// in the pattern [`run`, `obs` (if `run` true) or `wait` (`run` false)],
+/// then the `Synchroniser` must guarantee that, at any time:
+/// 
+/// 1. either all threads are about to call `run`; or,
+/// 2. precisely one is about to call `obs` and the others are about to call
+///   `wait`.
+/// 
+/// This drives the FSA workflow that, at any point, all threads are either
+/// running the concurrent test, or have elected one thread to do the
+/// book-keeping for the results of that run while the others wait.
+///
+/// The synchroniser API is deliberately low level; for instance, it only tracks
+/// whether runners can be observers, rather than using that fact to hold data
+/// that only the observer can access.  We assume that the FSA itself does this,
+/// using the above invariant as justification.
+pub unsafe trait Synchroniser {
     /// Runner should call this after running;
     /// it returns whether the runner is an observer or not.
     fn run(&self) -> bool;
@@ -24,7 +45,7 @@ pub trait Synchroniser {
 
 /// Barriers are synchronisers; each phase corresponds to a barrier wait, and
 /// observers are nominated through the barrier's own leader function.
-impl Synchroniser for Barrier {
+unsafe impl Synchroniser for Barrier {
     fn run(&self) -> bool {
         self.wait().is_leader()
     }
@@ -60,7 +81,7 @@ impl Spinner {
     }
 }
 
-impl Synchroniser for Spinner {
+unsafe impl Synchroniser for Spinner {
     fn run(&self) -> bool {
         let count = self.inner.fetch_sub(1, Ordering::AcqRel);
         assert!(0 < count, "count negative after run (={})", count);
@@ -96,7 +117,7 @@ impl Synchroniser for Spinner {
         } else {
             // We need to wait until the last thread gets here.
             while self.inner.load(Ordering::Acquire) <= 0 {
-                // busy wait
+               // busy wait
             }
         }
     }
