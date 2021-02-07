@@ -69,6 +69,11 @@ pub struct Spinner {
 }
 
 impl Spinner {
+    /// Constructs a new `Spinner` with room for `nthreads` threads.
+    /// 
+    /// A `Spinner` can only hold enough threads that fit inside an `isize`,
+    /// for implementation reasons; the constructor will return an error if this
+    /// is not the case.
     pub fn new(nthreads: usize) -> err::Result<Self> {
         let initial: isize =
             isize::try_from(nthreads).map_err(err::Error::TooManyThreadsForSpinner)?;
