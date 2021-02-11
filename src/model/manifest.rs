@@ -7,20 +7,20 @@ pub struct Manifest {
     /// The number of threads available in the test.
     pub n_threads: usize,
     /// Ordered map of atomic int variables declared in the test.
-    pub atomic_ints: VarMap<i32>,
+    pub atomic_i32s: VarMap<i32>,
     /// Ordered map of int variables declared in the test.
-    pub ints: VarMap<i32>,
+    pub i32s: VarMap<i32>,
 }
 
 impl<'a> Manifest {
     /// Iterates over the names of each atomic int variable, in order.
-    pub fn atomic_int_names(&'a self) -> impl Iterator<Item = &'a str> + '_ {
-        self.atomic_ints.keys().map(String::as_str)
+    pub fn atomic_i32_names(&'a self) -> impl Iterator<Item = &'a str> + '_ {
+        self.atomic_i32s.keys().map(String::as_str)
     }
 
     /// Iterates over the names of each int variable, in order.
-    pub fn int_names(&'a self) -> impl Iterator<Item = &'a str> + '_ {
-        self.ints.keys().map(String::as_str)
+    pub fn i32_names(&'a self) -> impl Iterator<Item = &'a str> + '_ {
+        self.i32s.keys().map(String::as_str)
     }
 }
 

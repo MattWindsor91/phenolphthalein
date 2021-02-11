@@ -108,10 +108,10 @@ pub struct Manifested<'a, T> {
 impl<'a, T: abs::Env> Manifested<'a, T> {
     /// Resets the environment to the initial values in the manifest.
     pub fn reset(&mut self) {
-        for (i, (_, r)) in self.manifest.atomic_ints.iter().enumerate() {
+        for (i, (_, r)) in self.manifest.atomic_i32s.iter().enumerate() {
             self.env.set_atomic_i32(i, r.initial_value.unwrap_or(0))
         }
-        for (i, (_, r)) in self.manifest.ints.iter().enumerate() {
+        for (i, (_, r)) in self.manifest.i32s.iter().enumerate() {
             self.env.set_i32(i, r.initial_value.unwrap_or(0))
         }
     }
@@ -119,7 +119,7 @@ impl<'a, T: abs::Env> Manifested<'a, T> {
     // Iterates over all of the atomic integer variables in the environment.
     pub fn atomic_i32_values(&self) -> impl Iterator<Item = (String, i32)> + '_ {
         self.manifest
-            .atomic_int_names()
+            .atomic_i32_names()
             .enumerate()
             .map(move |(i, n)| (n.to_string(), self.env.get_atomic_i32(i)))
     }
@@ -127,7 +127,7 @@ impl<'a, T: abs::Env> Manifested<'a, T> {
     // Iterates over all of the 32-bit integer variables in the environment.
     pub fn i32_values(&self) -> impl Iterator<Item = (String, i32)> + '_ {
         self.manifest
-            .int_names()
+            .i32_names()
             .enumerate()
             .map(move |(i, n)| (n.to_string(), self.env.get_i32(i)))
     }

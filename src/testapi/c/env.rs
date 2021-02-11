@@ -53,7 +53,7 @@ impl abs::Env for Env {
     }
 
     fn for_manifest(m: &manifest::Manifest) -> err::Result<Self> {
-        Self::new(m.atomic_ints.len(), m.ints.len())
+        Self::new(m.atomic_i32s.len(), m.i32s.len())
     }
 }
 

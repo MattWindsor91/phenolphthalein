@@ -10,43 +10,43 @@ use std::{collections::BTreeMap, ffi};
 pub(super) struct Manifest {
     /// Number of threads in this test.
     n_threads: libc::size_t,
-    /// Number of atomic_ints in this test.
-    n_atomic_ints: libc::size_t,
+    /// Number of atomic 32-bit integers in this test.
+    n_atomic_i32: libc::size_t,
     /// Initial value for each atomic_int.
-    atomic_int_initials: *const libc::c_int,
+    atomic_i32_initials: *const i32,
     /// Name of each atomic_int.
-    atomic_int_names: *const *const libc::c_char,
-    /// Number of ints in this test.
-    n_ints: libc::size_t,
+    atomic_i32_names: *const *const libc::c_char,
+    /// Number of 32-bit integers in this test.
+    n_i32: libc::size_t,
     /// Initial value for each int.
-    int_initials: *const libc::c_int,
+    i32_initials: *const i32,
     /// Name of each int.
-    int_names: *const *const libc::c_char,
+    i32_names: *const *const libc::c_char,
 }
 
 impl Manifest {
-    fn atomic_int_name_vec(&self) -> Vec<String> {
-        unsafe { names(self.atomic_int_names, self.n_atomic_ints) }
+    fn atomic_i32_name_vec(&self) -> Vec<String> {
+        unsafe { names(self.atomic_i32_names, self.n_atomic_i32) }
     }
 
-    fn atomic_int_initial_vec(&self) -> Vec<i32> {
-        unsafe { initials(self.atomic_int_initials, self.n_atomic_ints) }
+    fn atomic_i32_initial_vec(&self) -> Vec<i32> {
+        unsafe { initials(self.atomic_i32_initials, self.n_atomic_i32) }
     }
 
-    fn atomic_int_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
-        lift_to_var_map(self.atomic_int_name_vec(), self.atomic_int_initial_vec())
+    fn atomic_i32_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
+        lift_to_var_map(self.atomic_i32_name_vec(), self.atomic_i32_initial_vec())
     }
 
-    fn int_name_vec(&self) -> Vec<String> {
-        unsafe { names(self.int_names, self.n_ints) }
+    fn i32_name_vec(&self) -> Vec<String> {
+        unsafe { names(self.i32_names, self.n_i32) }
     }
 
-    fn int_initial_vec(&self) -> Vec<i32> {
-        unsafe { initials(self.int_initials, self.n_ints) }
+    fn i32_initial_vec(&self) -> Vec<i32> {
+        unsafe { initials(self.i32_initials, self.n_i32) }
     }
 
-    fn int_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
-        lift_to_var_map(self.int_name_vec(), self.int_initial_vec())
+    fn i32_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
+        lift_to_var_map(self.i32_name_vec(), self.i32_initial_vec())
     }
 
     /// Tries to convert this C manifest to the standard structure.
@@ -56,8 +56,8 @@ impl Manifest {
         } else {
             Ok(manifest::Manifest {
                 n_threads: self.n_threads,
-                atomic_ints: self.atomic_int_map(),
-                ints: self.int_map(),
+                atomic_i32s: self.atomic_i32_map(),
+                i32s: self.i32_map(),
             })
         }
     }
