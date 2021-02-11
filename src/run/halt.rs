@@ -26,7 +26,7 @@ impl Rule {
     /// Gets the sort of exit, if any, that should occur given this condition
     /// and the most recent observation os.
     pub fn exit_type(&self, os: &obs::Summary) -> Option<Type> {
-        self.halt_type.exit_if(self.condition.check(os))
+        self.condition.check(os).then(|| self.halt_type)
     }
 }
 
@@ -103,14 +103,6 @@ impl Type {
             1 => Some(Self::Rotate),
             2 => Some(Self::Exit),
             _ => None,
-        }
-    }
-
-    fn exit_if(self, p: bool) -> Option<Type> {
-        if p {
-            Some(self)
-        } else {
-            None
         }
     }
 }
