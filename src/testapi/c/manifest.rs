@@ -1,5 +1,8 @@
-use crate::{err, model::manifest};
-use std::{collections::BTreeMap, ffi};
+use crate::{
+    err,
+    model::{manifest, slot},
+};
+use std::ffi;
 
 /// The raw manifest structure that the test implements to communicate auxiliary
 /// information to the test runner.
@@ -33,10 +36,6 @@ impl Manifest {
         unsafe { initials(self.atomic_i32_initials, self.n_atomic_i32) }
     }
 
-    fn atomic_i32_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
-        lift_to_var_map(self.atomic_i32_name_vec(), self.atomic_i32_initial_vec())
-    }
-
     fn i32_name_vec(&self) -> Vec<String> {
         unsafe { names(self.i32_names, self.n_i32) }
     }
@@ -45,8 +44,14 @@ impl Manifest {
         unsafe { initials(self.i32_initials, self.n_i32) }
     }
 
-    fn i32_map(&self) -> BTreeMap<String, manifest::VarRecord<i32>> {
-        lift_to_var_map(self.i32_name_vec(), self.i32_initial_vec())
+    fn i32_map(&self) -> manifest::VarMap<i32> {
+        let mut map = lift_to_var_map(self.i32_name_vec(), self.i32_initial_vec(), false);
+        map.extend(lift_to_var_map(
+            self.atomic_i32_name_vec(),
+            self.atomic_i32_initial_vec(),
+            true,
+        ));
+        map
     }
 
     /// Tries to convert this C manifest to the standard structure.
@@ -56,7 +61,6 @@ impl Manifest {
         } else {
             Ok(manifest::Manifest {
                 n_threads: self.n_threads,
-                atomic_i32s: self.atomic_i32_map(),
                 i32s: self.i32_map(),
             })
         }
@@ -83,12 +87,13 @@ unsafe fn initials(src: *const libc::c_int, n: libc::size_t) -> Vec<i32> {
     }
 }
 
-fn lift_to_var_map<T>(
-    names: Vec<String>,
-    inits: Vec<T>,
-) -> BTreeMap<String, manifest::VarRecord<T>> {
-    let records = inits.into_iter().map(|x| manifest::VarRecord {
-        initial_value: Some(x),
-    });
+fn lift_to_var_map<T>(names: Vec<String>, inits: Vec<T>, is_atomic: bool) -> manifest::VarMap<T> {
+    let records = inits
+        .into_iter()
+        .enumerate()
+        .map(|(index, x)| manifest::VarRecord {
+            initial_value: Some(x),
+            slot: slot::Slot { is_atomic, index },
+        });
     names.into_iter().zip(records).collect()
 }

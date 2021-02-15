@@ -3,3 +3,4 @@
 pub mod check;
 pub mod manifest;
 pub mod obs;
+pub mod slot;

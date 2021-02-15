@@ -1,4 +1,8 @@
-use crate::{err, model::manifest, testapi::abs};
+use crate::{
+    err,
+    model::{manifest, slot},
+    testapi::abs,
+};
 use std::ptr;
 
 /// Dummy object used to represent pointers to C environments.
@@ -30,30 +34,27 @@ pub struct Env {
 }
 
 impl abs::Env for Env {
-    /// Gets the atomic integer in slot i.
+    /// Gets the 32-bit integer in slot slot.
     /// Assumes that the C implementation does range checking and returns a
     /// valid but undefined result if i is out of bounds.
-    fn get_atomic_i32(&self, i: usize) -> i32 {
-        unsafe { get_atomic_int32(self.p, i) }
+    fn get_i32(&self, slot: slot::Slot) -> i32 {
+        if slot.is_atomic {
+            unsafe { get_atomic_int32(self.p, slot.index) }
+        } else {
+            unsafe { get_int32(self.p, slot.index) }
+        }
     }
 
-    /// Gets the integer in slot i.
-    /// Assumes that the C implementation does range checking and returns a
-    /// valid but undefined result if i is out of bounds.
-    fn get_i32(&self, i: usize) -> i32 {
-        unsafe { get_int32(self.p, i) }
-    }
-
-    fn set_atomic_i32(&mut self, i: usize, v: i32) {
-        unsafe { set_atomic_int32(self.p, i, v) }
-    }
-
-    fn set_i32(&mut self, i: usize, v: i32) {
-        unsafe { set_int32(self.p, i, v) }
+    fn set_i32(&mut self, slot: slot::Slot, v: i32) {
+        if slot.is_atomic {
+            unsafe { set_atomic_int32(self.p, slot.index, v) }
+        } else {
+            unsafe { set_int32(self.p, slot.index, v) }
+        }
     }
 
     fn for_manifest(m: &manifest::Manifest) -> err::Result<Self> {
-        Self::new(m.atomic_i32s.len(), m.i32s.len())
+        Self::new(m.reserve_i32s())
     }
 }
 
@@ -85,10 +86,10 @@ impl Clone for Env {
 
 impl Env {
     /// Creates a new environment with the given dimensions.
-    pub fn new(num_atomic_ints: usize, num_ints: usize) -> err::Result<Self> {
+    pub fn new(i32s: slot::Reservation<i32>) -> err::Result<Self> {
         let mut e = Env { p: ptr::null_mut() };
         unsafe {
-            e.p = alloc_env(num_atomic_ints, num_ints);
+            e.p = alloc_env(i32s.atomic, i32s.non_atomic);
         }
         if e.p.is_null() {
             Err(err::Error::EnvAllocFailed)
@@ -100,27 +101,40 @@ impl Env {
 
 #[cfg(test)]
 mod tests {
-    use crate::testapi::abs::Env;
+    use crate::{
+        model::slot::{Reservation, Slot},
+        testapi::abs::Env,
+    };
 
     #[test]
     /// Tests storing and loading a 32-bit atomic integer.
     fn test_store_load_atomic_i32() {
-        let mut env = super::Env::new(1, 0).unwrap();
+        let slot = Slot {
+            index: 0,
+            is_atomic: true,
+        };
+        let mut env = super::Env::new(Reservation::of_slots(vec![slot].into_iter())).unwrap();
+
         let env2 = env.clone();
-        assert_eq!(0, env.get_atomic_i32(0));
-        env.set_atomic_i32(0, 42);
-        assert_eq!(42, env.get_atomic_i32(0));
-        assert_eq!(42, env2.get_atomic_i32(0))
+        assert_eq!(0, env.get_i32(slot));
+        env.set_i32(slot, 42);
+        assert_eq!(42, env.get_i32(slot));
+        assert_eq!(42, env2.get_i32(slot))
     }
 
     #[test]
     /// Tests storing and loading a 32-bit integer.
     fn test_store_load_i32() {
-        let mut env = super::Env::new(0, 1).unwrap();
+        let slot = Slot {
+            index: 0,
+            is_atomic: false,
+        };
+        let mut env = super::Env::new(Reservation::of_slots(vec![slot].into_iter())).unwrap();
+
         let env2 = env.clone();
-        assert_eq!(0, env.get_i32(0));
-        env.set_i32(0, 42);
-        assert_eq!(42, env.get_i32(0));
-        assert_eq!(42, env2.get_i32(0))
+        assert_eq!(0, env.get_i32(slot));
+        env.set_i32(slot, 42);
+        assert_eq!(42, env.get_i32(slot));
+        assert_eq!(42, env2.get_i32(slot))
     }
 }
