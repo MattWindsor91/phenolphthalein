@@ -27,7 +27,7 @@ impl<'a> model::check::Checker<env::Env> for Checker<'a> {
 impl<'a> abs::Entry<'a> for Entry<'a> {
     type Env = env::Env;
 
-    fn run(&self, tid: usize, e: &mut Self::Env) {
+    fn run(&self, tid: usize, e: &Self::Env) {
         unsafe { (self.test)(tid, e.p) }
     }
 

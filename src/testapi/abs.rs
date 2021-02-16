@@ -25,7 +25,7 @@ pub trait Entry<'a>: Clone {
     fn make_manifest(&self) -> err::Result<model::manifest::Manifest>;
 
     /// Runs the entry point given a thread ID and handle to the environment.
-    fn run(&self, tid: usize, e: &mut Self::Env);
+    fn run(&self, tid: usize, e: &Self::Env);
 
     /// Gets a checker for this entry point's environments.
     fn checker(&self) -> Box<dyn model::check::Checker<Self::Env> + 'a>;

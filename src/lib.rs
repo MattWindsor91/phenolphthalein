@@ -1,4 +1,5 @@
 //! The phenolphthalein library top-level.
+#![warn(clippy::all)]
 
 #[macro_use]
 extern crate dlopen_derive;

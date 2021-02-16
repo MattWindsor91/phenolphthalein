@@ -62,7 +62,7 @@ impl<S, T, E> Fsa for Runnable<S, T, E> {
 
 impl<'a, S, T: abs::Entry<'a>> Runnable<S, T, T::Env> {
     /// Runs another iteration of this FSA's thread body.
-    pub fn run(mut self) -> RunOutcome<S, T, T::Env> {
+    pub fn run(self) -> RunOutcome<S, T, T::Env> {
         if let Some(halt_type) = self.halt_type() {
             return RunOutcome::Done(Done {
                 tid: self.0.tid,
@@ -70,7 +70,7 @@ impl<'a, S, T: abs::Entry<'a>> Runnable<S, T, T::Env> {
             });
         }
 
-        self.0.entry.run(self.0.tid, &mut self.0.env);
+        unsafe { self.0.run() };
         if self.0.sync.run() {
             RunOutcome::Observe(Observable(self.0))
         } else {
@@ -121,8 +121,16 @@ impl<S, T, E> Fsa for Observable<S, T, E> {
 impl<S, T, E> Observable<S, T, E> {
     /// Borrows access to the shared state exposed by this `Observable`.
     pub fn shared_state(&mut self) -> (&mut E, &mut S) {
+        /* This is safe provided that the FSA's synchroniser correctly
+        guarantees only one automaton can be in the Observable state
+        at any given time, and remains in it for the duration of this
+        mutable borrow (note that relinquishing Observable requires
+        taking ownership of it). */
+
         // TODO(@MattWindsor91): E and S should be the same thing.
-        (&mut self.0.env, unsafe { &mut *self.0.tester_state.get() })
+        (unsafe { &mut *self.0.env.get() }, unsafe {
+            &mut *self.0.tester_state.get()
+        })
     }
 
     /// Relinquishes the ability to observe the environment, and returns to a
@@ -167,7 +175,7 @@ struct Inner<S, T, E> {
     entry: T,
 
     /// Handle to the state of the concurrency test itself.
-    env: E,
+    env: Arc<UnsafeCell<E>>,
 
     sync: Arc<dyn sync::Synchroniser>,
 
@@ -191,7 +199,7 @@ impl<S, T, E> Inner<S, T, E> {
             sync,
             halt_state: Arc::new(AtomicU8::new(0)),
             tester_state: Arc::new(UnsafeCell::new(tester_state)),
-            env,
+            env: Arc::new(UnsafeCell::new(env)),
             entry,
         }
     }
@@ -232,6 +240,17 @@ impl<S, T: Clone, E: Clone> Inner<S, T, E> {
 impl<S, T: Clone, E: Clone> Clone for Inner<S, T, E> {
     fn clone(&self) -> Self {
         self.clone_with_tid(self.tid)
+    }
+}
+
+impl<'a, S, T: abs::Entry<'a>> Inner<S, T, T::Env> {
+    /// Runs the test's entry with the current environment.
+    ///
+    /// Unsafe because there may be mutable references to the environment held
+    /// by safe code (in `Observable`s), and we rely on the `Inner`'s owning
+    /// state structs to implement the right form of synchronisation.
+    unsafe fn run(&self) {
+        self.entry.run(self.tid, &*self.env.get());
     }
 }
 
