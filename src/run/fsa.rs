@@ -220,7 +220,7 @@ impl<S, T, E> Inner<S, T, E> {
     }
 }
 
-impl<S, T: Clone, E: Clone> Inner<S, T, E> {
+impl<S, T: Clone, E> Inner<S, T, E> {
     // These aren't public because Inner isn't public.
 
     /// Clones an inner handle, but with the new thread ID `new_tid`.
@@ -237,7 +237,7 @@ impl<S, T: Clone, E: Clone> Inner<S, T, E> {
 }
 
 /// We can't derive Clone, because it infers the wrong bound on `S`.
-impl<S, T: Clone, E: Clone> Clone for Inner<S, T, E> {
+impl<S, T: Clone, E> Clone for Inner<S, T, E> {
     fn clone(&self) -> Self {
         self.clone_with_tid(self.tid)
     }
@@ -275,7 +275,7 @@ impl<S, T, E> Set<S, T, E> {
     }
 }
 
-impl<S, T: Clone, E: Clone> Set<S, T, E> {
+impl<S, T: Clone, E> Set<S, T, E> {
     /// Spawns a series of threadlike objects using the FSAs in this set,
     /// joins on each to retrieve evidence that the FSA is done, and returns
     /// a copy of this `Set`.

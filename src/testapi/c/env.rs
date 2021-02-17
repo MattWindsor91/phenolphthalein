@@ -16,7 +16,6 @@ pub(super) struct UnsafeEnv {
 
 extern "C" {
     fn alloc_env(atomic_ints: libc::size_t, ints: libc::size_t) -> *mut UnsafeEnv;
-    fn copy_env(e: *mut UnsafeEnv) -> *mut UnsafeEnv;
     fn free_env(e: *mut UnsafeEnv);
     fn get_atomic_int32(e: *const UnsafeEnv, index: libc::size_t) -> i32;
     fn get_int32(e: *const UnsafeEnv, index: libc::size_t) -> i32;
@@ -59,28 +58,12 @@ impl abs::Env for Env {
 }
 
 /// Envs can be dropped.
-///
-/// We rely on the `UnsafeEnv` having a reference counter or similar scheme.
 impl Drop for Env {
     fn drop(&mut self) {
         unsafe {
             free_env(self.p);
             self.p = ptr::null_mut();
         }
-    }
-}
-
-/// Envs can be cloned.
-///
-/// We again rely on the `UnsafeEnv` to implement the right semantics.
-impl Clone for Env {
-    fn clone(&self) -> Self {
-        let p;
-        // TODO(@MattWindsor91): what if this returns null?
-        unsafe {
-            p = copy_env(self.p);
-        }
-        Env { p }
     }
 }
 
@@ -115,11 +98,9 @@ mod tests {
         };
         let mut env = super::Env::new(Reservation::of_slots(vec![slot].into_iter())).unwrap();
 
-        let env2 = env.clone();
         assert_eq!(0, env.get_i32(slot));
         env.set_i32(slot, 42);
         assert_eq!(42, env.get_i32(slot));
-        assert_eq!(42, env2.get_i32(slot))
     }
 
     #[test]
@@ -131,10 +112,8 @@ mod tests {
         };
         let mut env = super::Env::new(Reservation::of_slots(vec![slot].into_iter())).unwrap();
 
-        let env2 = env.clone();
         assert_eq!(0, env.get_i32(slot));
         env.set_i32(slot, 42);
         assert_eq!(42, env.get_i32(slot));
-        assert_eq!(42, env2.get_i32(slot))
     }
 }

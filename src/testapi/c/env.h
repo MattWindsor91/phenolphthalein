@@ -8,10 +8,6 @@ struct env;
 // Constructs a new environment with the given number of variable slots.
 struct env *alloc_env(size_t n_atomic_int32, size_t n_int32);
 
-// Copies an environment, returning a pointer to the new environment.
-// This pointer may or may not be the same as e.
-struct env *copy_env(struct env *e);
-
 // Frees the environment e.
 // Depending on the implementation of copy_env, this may or may not actually
 // de-allocate e's contents on copies; regardless, one should not use e
@@ -19,7 +15,7 @@ struct env *copy_env(struct env *e);
 void free_env(struct env *e);
 
 /*
- * Reading to and writing from an env outside a test
+ * Reading to and writing from an env outside a test.
  *
  * These functions exist mainly for the benefit of test runners written in
  * languages where atomics aren't ABI comparible with those in C.

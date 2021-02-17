@@ -35,7 +35,7 @@ pub trait Entry<'a>: Clone {
 ///
 /// This trait currently mainly exists to hide parts of the actual environment
 /// that aren't thread-safe to run, but may be more useful later on.
-pub trait Env: Sized + Clone {
+pub trait Env: Sized {
     /// Constructs an environment for the given manifest.
     fn for_manifest(m: &model::manifest::Manifest) -> err::Result<Self>;
 
