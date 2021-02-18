@@ -1,4 +1,4 @@
-use crate::{model, testapi::abs};
+use crate::{err, model, testapi::abs};
 
 /* TODO(@MattWindsor91): morally, a State should only borrow the variable names,
    as they are held by the parent Observer's Manifest for the entire scope that
@@ -42,7 +42,7 @@ impl Observer {
     ) -> model::obs::Obs {
         let state = current_state(env);
         let info = self.obs.get(&state).map_or_else(
-            || self.observe_state_for_first_time(env.env, checker),
+            || self.observe_state_for_first_time(&env.env, checker),
             model::obs::Obs::inc,
         );
         self.obs.insert(state, info);
@@ -92,19 +92,22 @@ pub struct Summary {
     pub info: model::obs::Obs,
 }
 
-/// A borrowed environment combined with a borrowed manifest.
+/// An environment combined with a manifest.
 ///
 /// Bundling these two together lets us interpret the environment using the
 /// manifest.
 ///
 /// For this to be safe, we assume that the environment gracefully handles any
 /// mismatches between itself and the manifest.
-pub struct Manifested<'a, T> {
-    pub manifest: &'a model::manifest::Manifest,
-    pub env: &'a mut T,
+pub struct Manifested<E> {
+    /// The manifest.
+    pub manifest: model::manifest::Manifest,
+
+    /// The environment being interpreted by the manifest.
+    pub env: E,
 }
 
-impl<'a, T: abs::Env> Manifested<'a, T> {
+impl<E: abs::Env> Manifested<E> {
     /// Resets the environment to the initial values in the manifest.
     pub fn reset(&mut self) {
         for r in self.manifest.i32s.values() {
@@ -118,5 +121,11 @@ impl<'a, T: abs::Env> Manifested<'a, T> {
             .i32s
             .iter()
             .map(move |(n, r)| (n.to_string(), self.env.get_i32(r.slot)))
+    }
+
+    /// Constructs a manifested environment for a given manifest.
+    pub fn for_manifest(manifest: model::manifest::Manifest) -> err::Result<Manifested<E>> {
+        let env = E::for_manifest(&manifest)?;
+        Ok(Self { manifest, env })
     }
 }

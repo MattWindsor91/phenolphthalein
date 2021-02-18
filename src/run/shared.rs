@@ -11,23 +11,19 @@ use crate::{model, testapi::abs};
 pub struct State<'a, E> {
     /// The state checker for the test.
     pub checker: Box<dyn model::check::Checker<E> + 'a>,
+    /// The manifested environment.
+    pub env: obs::Manifested<E>,
     /// The halt rules for the test.
     pub halt_rules: Vec<halt::Rule>,
     /// The observer for the test.
     pub observer: obs::Observer,
-    /// The manifest for the test.
-    pub manifest: model::manifest::Manifest,
 }
 
 impl<'a, E: abs::Env> State<'a, E> {
     /// Handles the environment, including observing it and resetting it.
-    pub fn handle(&mut self, env: &mut E) -> Option<halt::Type> {
-        let mut m = obs::Manifested {
-            manifest: &self.manifest,
-            env,
-        };
-        let summary = self.observer.observe(&mut m, &*self.checker);
-        m.reset();
+    pub fn observe(&mut self) -> Option<halt::Type> {
+        let summary = self.observer.observe(&mut self.env, &*self.checker);
+        self.env.reset();
         self.exit_type(summary)
     }
 
