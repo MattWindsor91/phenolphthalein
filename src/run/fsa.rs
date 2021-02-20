@@ -221,13 +221,25 @@ impl<'a, T: Entry<'a>> Inner<'a, T> {
         }
     }
 
-    /// Runs the test's entry with the current environment.
+    /// Produces a vector of inner handles with thread IDs from 0 up to this
+    /// handle's thread ID.
+    fn replicate(self) -> Vec<Self> {
+        let mut vec = Vec::with_capacity(self.tid + 1);
+        for tid in 0..self.tid {
+            vec.push(self.clone_with_tid(tid));
+        }
+        vec.push(self);
+        vec
+    }
+
+    /// Runs the inner handle's entry with the current environment.
     ///
     /// Unsafe because there may be mutable references to the environment held
     /// by safe code (in `Observable`s), and we rely on the `Inner`'s owning
-    /// state structs to implement the right form of synchronisation.
+    /// state structs (eg `Runnable`) to implement the right form of
+    /// synchronisation.
     unsafe fn run(&self) {
-        let env = &(&*self.tester_state.get()).env.env;
+        let env = &(*self.tester_state.get()).env.env;
         self.entry.run(self.tid, env);
     }
 }
@@ -252,7 +264,7 @@ pub struct Set<'a, T: Entry<'a>> {
 impl<'a, T: Entry<'a>> Set<'a, T> {
     /// Spawns a series of threadlike objects using the FSAs in this set,
     /// joins on each to retrieve evidence that the FSA is done, and returns
-    /// a copy of this `Set`.
+    /// the outcome of the run (possibly containing another set).
     ///
     /// This method exists to allow situations where we want to re-run the FSAs
     /// of a test on multiple thread configurations, and attempts to prevent
@@ -260,27 +272,27 @@ impl<'a, T: Entry<'a>> Set<'a, T> {
     /// handle.
     pub fn run<'scope, R: Threader<'a, 'scope>, P: Permuter<'a, T> + ?Sized>(
         self,
-        runner: &'scope R,
+        threader: &'scope R,
         permuter: &mut P,
     ) -> err::Result<Outcome<'a, T>> {
         // TODO(@MattWindsor91): the observations should only be visible from the environment once we've joined these threads
         // in general, all of the thread-unsafe stuff should be hidden inside the environment
-        let handles = self.spawn_all(runner, permuter);
-        self.into_outcome(join_all(handles, runner)?)
+        let handles = self.spawn_all(threader, permuter);
+        self.into_outcome(join_all(handles, threader)?)
     }
 
     /// Makes a ready state for every thread in this set, permutes them if
-    /// necessary, and uses the runner to spawn a threadlike object.
+    /// necessary, and uses the threader to spawn a threadlike object.
     ///
     /// Ensures each thread will be spawned before returning.
     fn spawn_all<'scope, R: Threader<'a, 'scope>, P: Permuter<'a, T> + ?Sized>(
         &self,
-        runner: &'scope R,
+        threader: &'scope R,
         permuter: &mut P,
     ) -> Vec<err::Result<R::Handle>> {
         let mut ready: Vec<Ready<'a, T>> = self.vec.iter().map(|i| Ready(i.clone())).collect();
         permuter.permute(&mut ready);
-        ready.into_iter().map(|x| runner.spawn(x)).collect()
+        ready.into_iter().map(|x| threader.spawn(x)).collect()
     }
 
     fn into_outcome(self, halt_type: halt::Type) -> err::Result<Outcome<'a, T>> {
@@ -322,17 +334,10 @@ impl<'a, T: Entry<'a>> Set<'a, T> {
     ) -> err::Result<Self> {
         let nthreads = tester_state.env.manifest.n_threads;
         let sync = sync(nthreads)?;
-        let last_tid = nthreads - 1;
-        let inner = Inner::new(last_tid, tester_state, entry, sync);
-        let mut automata = Set {
-            vec: Vec::with_capacity(nthreads),
-        };
-        for tid in 0..last_tid {
-            automata.vec.push(inner.clone_with_tid(tid));
-        }
-
-        automata.vec.push(inner);
-        Ok(automata)
+        let last = Inner::new(nthreads - 1, tester_state, entry, sync);
+        Ok(Set {
+            vec: last.replicate(),
+        })
     }
 }
 
