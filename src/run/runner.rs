@@ -26,15 +26,23 @@ impl<'a, T: abs::Entry<'a>> Builder<T> {
     pub fn build(self) -> err::Result<Runner<'a, T>> {
         let manifest = self.entry.make_manifest()?;
         let shared = self.make_shared_state(manifest.clone())?;
-        let rng = rand::thread_rng();
         let automata = fsa::Set::new(self.entry.clone(), manifest, self.sync, shared)?;
+
+        let permuter = self.permuter();
 
         Ok(Runner {
             automata: Some(automata),
-            permute_threads: self.permute_threads,
-            rng,
+            permuter,
             report: None,
         })
+    }
+
+    fn permuter(&self) -> Box<dyn fsa::Permuter<'a, T> + 'a> {
+        if self.permute_threads {
+            Box::new(rand::thread_rng())
+        } else {
+            Box::new(fsa::NopPermuter {})
+        }
     }
 
     fn make_shared_state(
@@ -65,17 +73,29 @@ impl<'a, T: abs::Entry<'a>> Builder<T> {
 pub struct Runner<'a, T: abs::Entry<'a>> {
     automata: Option<fsa::Set<'a, T>>,
     report: Option<model::obs::Report>,
-    permute_threads: bool,
-    rng: rand::prelude::ThreadRng,
+    permuter: Box<dyn fsa::Permuter<'a, T> + 'a>,
+}
+
+impl<'a, 'scope> fsa::Threader<'a, 'scope> for &'scope crossbeam::thread::Scope<'a> {
+    type Handle = crossbeam::thread::ScopedJoinHandle<'scope, fsa::Done>;
+
+    fn spawn<T: abs::Entry<'a> + 'a>(
+        &'scope self,
+        automaton: fsa::Ready<'a, T>,
+    ) -> err::Result<Self::Handle> {
+        let builder = self.builder().name(format!("P{0}", automaton.tid()));
+        Ok(builder.spawn(move |_| run_thread(automaton.start()))?)
+    }
+
+    fn join(&'scope self, handle: Self::Handle) -> err::Result<fsa::Done> {
+        handle.join().map_err(|_| err::Error::ThreadPanic)
+    }
 }
 
 impl<'a, T: abs::Entry<'a>> Runner<'a, T> {
     /// Runs the Runner's test until it exits.
     pub fn run(mut self) -> err::Result<model::obs::Report> {
-        while let Some(mut am) = self.automata.take() {
-            if self.permute_threads {
-                am.permute(&mut self.rng);
-            }
+        while let Some(am) = self.automata.take() {
             match self.run_rotation(am)? {
                 fsa::Outcome::Rotate(am) => {
                     self.automata.replace(am);
@@ -87,18 +107,9 @@ impl<'a, T: abs::Entry<'a>> Runner<'a, T> {
         self.report.ok_or(err::Error::LockReleaseFailed)
     }
 
-    fn run_rotation(&self, automata: fsa::Set<'a, T>) -> err::Result<fsa::Outcome<'a, T>> {
-        crossbeam::thread::scope(|s| {
-            automata.run(
-                |r: fsa::Ready<'a, T>| {
-                    let builder = s.builder().name(format!("P{0}", r.tid()));
-                    let handle = builder.spawn(move |_| run_thread(r.start()))?;
-                    Ok(handle)
-                },
-                |h| h.join().map_err(|_| err::Error::ThreadPanic),
-            )
-        })
-        .map_err(|_| err::Error::ThreadPanic)?
+    fn run_rotation(&mut self, automata: fsa::Set<'a, T>) -> err::Result<fsa::Outcome<'a, T>> {
+        crossbeam::thread::scope(|s| automata.run(&s, &mut *self.permuter))
+            .map_err(|_| err::Error::ThreadPanic)?
     }
 
     fn make_report(&mut self, state: shared::State<'a, T::Env>) {

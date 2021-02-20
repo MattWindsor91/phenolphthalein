@@ -16,7 +16,7 @@ pub trait Test<'a> {
 }
 
 /// Trait of cloneable entry points into tests.
-pub trait Entry<'a>: Clone {
+pub trait Entry<'a>: Clone + 'a {
     /// Every test entry has an associated environment type, which implements
     /// a fairly basic API for inspection and resetting.
     type Env: Env + 'a;

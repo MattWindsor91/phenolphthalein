@@ -251,15 +251,6 @@ pub struct Set<'a, T: Entry<'a>> {
 }
 
 impl<'a, T: Entry<'a>> Set<'a, T> {
-    /// Borrows the inner state of one of the threads in this set.
-    ///
-    /// It is undefined as to which thread will be picked on for this borrowing,
-    /// but most of the inner state is shared through `Arc`s and so this detail
-    /// usually doesn't matter.
-    fn inner(&self) -> err::Result<&Inner<'a, T>> {
-        self.vec.first().ok_or(err::Error::NotEnoughThreads)
-    }
-
     /// Spawns a series of threadlike objects using the FSAs in this set,
     /// joins on each to retrieve evidence that the FSA is done, and returns
     /// a copy of this `Set`.
@@ -268,33 +259,29 @@ impl<'a, T: Entry<'a>> Set<'a, T> {
     /// of a test on multiple thread configurations, and attempts to prevent
     /// unsafe parallel usage of more FSAs at once than the test was built to
     /// handle.
-    pub fn run<H>(
+    pub fn run<'scope, R: Threader<'a, 'scope>, P: Permuter<'a, T> + ?Sized>(
         self,
-        spawn: impl Fn(Ready<'a, T>) -> err::Result<H>,
-        join: fn(H) -> err::Result<Done>,
+        runner: &'scope R,
+        permuter: &mut P,
     ) -> err::Result<Outcome<'a, T>> {
         // TODO(@MattWindsor91): the observations should only be visible from the environment once we've joined these threads
         // in general, all of the thread-unsafe stuff should be hidden inside the environment
-        let handles = self.spawn_all(spawn);
-        self.into_outcome(join_all(handles, join)?)
+        let handles = self.spawn_all(runner, permuter);
+        self.into_outcome(join_all(handles, runner)?)
     }
 
-    /// Permutes the thread automata inside this set.
-    pub fn permute<R: rand::Rng>(&mut self, rng: &mut R) {
-        let v = &mut self.vec[..];
-        v.shuffle(rng);
-    }
-
-    /// Makes a ready state for every thread in this set, and uses `spawn` to
-    /// spawn a threadlike object with handle type `H`.
+    /// Makes a ready state for every thread in this set, permutes them if
+    /// necessary, and uses the runner to spawn a threadlike object.
     ///
     /// Ensures each thread will be spawned before returning.
-    fn spawn_all<H>(&self, spawn: impl Fn(Ready<'a, T>) -> err::Result<H>) -> Vec<err::Result<H>> {
-        self.vec
-            .clone()
-            .into_iter()
-            .map(|i| spawn(Ready(i)))
-            .collect()
+    fn spawn_all<'scope, R: Threader<'a, 'scope>, P: Permuter<'a, T> + ?Sized>(
+        &self,
+        runner: &'scope R,
+        permuter: &mut P,
+    ) -> Vec<err::Result<R::Handle>> {
+        let mut ready: Vec<Ready<'a, T>> = self.vec.iter().map(|i| Ready(i.clone())).collect();
+        permuter.permute(&mut ready);
+        ready.into_iter().map(|x| runner.spawn(x)).collect()
     }
 
     fn into_outcome(self, halt_type: halt::Type) -> err::Result<Outcome<'a, T>> {
@@ -313,6 +300,15 @@ impl<'a, T: Entry<'a>> Set<'a, T> {
                 Outcome::Exit(inc.get_state()?)
             }
         })
+    }
+
+    /// Borrows the inner state of one of the threads in this set.
+    ///
+    /// It is undefined as to which thread will be picked on for this borrowing,
+    /// but most of the inner state is shared through `Arc`s and so this detail
+    /// usually doesn't matter.
+    fn inner(&self) -> err::Result<&Inner<'a, T>> {
+        self.vec.first().ok_or(err::Error::NotEnoughThreads)
     }
 
     /// Constructs a `Set` from a test entry point and its associated manifest.
@@ -341,18 +337,6 @@ impl<'a, T: Entry<'a>> Set<'a, T> {
         Ok(automata)
     }
 }
-fn join_all<H>(
-    handles: Vec<err::Result<H>>,
-    join: fn(H) -> err::Result<Done>,
-) -> err::Result<halt::Type> {
-    let mut halt_type = halt::Type::Exit;
-    for h in handles {
-        let done = join(h?)?;
-        // These'll be the same, so it doesn't matter which we grab.
-        halt_type = done.halt_type;
-    }
-    Ok(halt_type)
-}
 
 /// Enumeration of outcomes that can occur when running a set.
 pub enum Outcome<'a, T: Entry<'a>> {
@@ -362,4 +346,51 @@ pub enum Outcome<'a, T: Entry<'a>> {
     /// The test has exited, and the tester state passed outwards for
     /// inspection.
     Exit(shared::State<'a, T::Env>),
+}
+
+/// Trait for things that can permute threads.
+pub trait Permuter<'a, E: Entry<'a>> {
+    /// Permutes a set of ready automata.
+    ///
+    /// Given that the FSA set presents each automaton to the thread runner
+    /// in order, this can be used to change thread ordering or affinity.
+    fn permute(&mut self, threads: &mut [Ready<'a, E>]);
+}
+
+impl<'a, T: rand::Rng + ?Sized, E: Entry<'a>> Permuter<'a, E> for T {
+    fn permute(&mut self, threads: &mut [Ready<'a, E>]) {
+        threads.shuffle(self)
+    }
+}
+
+// A permuter that doesn't actually permute.
+pub struct NopPermuter {}
+
+impl<'a, E: Entry<'a>> Permuter<'a, E> for NopPermuter {
+    fn permute(&mut self, _: &mut [Ready<'a, E>]) {}
+}
+
+/// Trait for things that can 'run' a test automaton as a thread.
+pub trait Threader<'a, 'scope> {
+    /// The type of thread handles.
+    type Handle;
+
+    /// Spawns a runner for a ready state, returning a handle.
+    fn spawn<E: Entry<'a>>(&'scope self, state: Ready<'a, E>) -> err::Result<Self::Handle>;
+
+    /// Joins a handle, returning the done state of the FSA.
+    fn join(&'scope self, handle: Self::Handle) -> err::Result<Done>;
+}
+
+fn join_all<'a, 'scope, R: Threader<'a, 'scope>>(
+    handles: Vec<err::Result<R::Handle>>,
+    runner: &'scope R,
+) -> err::Result<halt::Type> {
+    let mut halt_type = halt::Type::Exit;
+    for h in handles {
+        let done = runner.join(h?)?;
+        // These'll be the same, so it doesn't matter which we grab.
+        halt_type = done.halt_type;
+    }
+    Ok(halt_type)
 }
