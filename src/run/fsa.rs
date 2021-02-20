@@ -159,14 +159,17 @@ impl Fsa for Done {
 
 /// Hidden implementation of all the various automaton states.
 struct Inner<'a, T: Entry<'a>> {
+    /// The thread ID of this automaton.
     tid: usize,
 
     /// Wraps shared tester state in such a way that it can become mutable when
     /// we are in the `Observing` state.
     tester_state: Arc<UnsafeCell<shared::State<'a, T::Env>>>,
 
+    /// The test entry point, used when running the test body.
     entry: T,
 
+    /// Points to the synchroniser used to keep automata in valid states.
     sync: Arc<dyn sync::Synchroniser>,
 
     /// Set to rotate when an observer thread has decided the test should
@@ -206,10 +209,6 @@ impl<'a, T: Entry<'a>> Inner<'a, T> {
         let cell = Arc::try_unwrap(self.tester_state).map_err(|_| err::Error::LockReleaseFailed)?;
         Ok(cell.into_inner())
     }
-}
-
-impl<'a, T: Entry<'a>> Inner<'a, T> {
-    // These aren't public because Inner isn't public.
 
     /// Clones an inner handle, but with the new thread ID `new_tid`.
     fn clone_with_tid(&self, new_tid: usize) -> Self {
@@ -233,7 +232,7 @@ impl<'a, T: Entry<'a>> Inner<'a, T> {
     }
 }
 
-/// We can't derive Clone, because it infers the wrong bound on `S`.
+/// We can't derive Clone, because it infers the wrong bound on `E`.
 impl<'a, T: Entry<'a>> Clone for Inner<'a, T> {
     fn clone(&self) -> Self {
         self.clone_with_tid(self.tid)
