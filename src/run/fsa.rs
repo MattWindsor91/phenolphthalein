@@ -1,7 +1,7 @@
 //! The main testing finite state automaton, and helper functions for it.
 
 use super::{halt, shared, sync};
-use crate::{err, model::manifest, testapi::abs::Entry};
+use crate::{err, testapi::abs::Entry};
 use rand::seq::SliceRandom;
 use std::cell::UnsafeCell;
 use std::sync::{
@@ -318,11 +318,10 @@ impl<'a, T: Entry<'a>> Set<'a, T> {
     /// this.
     pub(super) fn new(
         entry: T,
-        manifest: manifest::Manifest,
         sync: sync::Factory,
         tester_state: shared::State<'a, T::Env>,
     ) -> err::Result<Self> {
-        let nthreads = manifest.n_threads;
+        let nthreads = tester_state.env.manifest.n_threads;
         let sync = sync(nthreads)?;
         let last_tid = nthreads - 1;
         let inner = Inner::new(last_tid, tester_state, entry, sync);

@@ -25,8 +25,8 @@ pub struct Builder<T> {
 impl<'a, T: abs::Entry<'a>> Builder<T> {
     pub fn build(self) -> err::Result<Runner<'a, T>> {
         let manifest = self.entry.make_manifest()?;
-        let shared = self.make_shared_state(manifest.clone())?;
-        let automata = fsa::Set::new(self.entry.clone(), manifest, self.sync, shared)?;
+        let shared = self.make_shared_state(manifest)?;
+        let automata = fsa::Set::new(self.entry.clone(), self.sync, shared)?;
 
         let permuter = self.permuter();
 
