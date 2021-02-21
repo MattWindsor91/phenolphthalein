@@ -4,8 +4,8 @@
 #[macro_use]
 extern crate dlopen_derive;
 
+pub mod api;
 pub mod err;
 pub mod model;
 pub mod run;
-pub mod testapi;
 pub mod ux;

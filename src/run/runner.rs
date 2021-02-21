@@ -1,7 +1,7 @@
 //! The high-level test runner.
 //!
 use super::{fsa, fsa::Fsa, halt, obs, shared, sync};
-use crate::{err, model, testapi::abs};
+use crate::{api::abs, err, model};
 
 /// A builder for tests.
 pub struct Builder<T> {

@@ -1,8 +1,6 @@
-use crate::{
-    err,
-    model::{manifest, slot},
-    testapi::abs,
-};
+use slot::ReservationSet;
+
+use crate::{api::abs, err, model::slot};
 use std::ptr;
 
 /// Dummy object used to represent pointers to C environments.
@@ -52,8 +50,18 @@ impl abs::Env for Env {
         }
     }
 
-    fn for_manifest(m: &manifest::Manifest) -> err::Result<Self> {
-        Self::new(m.reserve_i32s())
+    fn of_reservations(reservations: slot::ReservationSet) -> err::Result<Self> {
+        let ReservationSet { i32s } = reservations;
+
+        let mut e = Env { p: ptr::null_mut() };
+        unsafe {
+            e.p = alloc_env(i32s.atomic, i32s.non_atomic);
+        }
+        if e.p.is_null() {
+            Err(err::Error::EnvAllocFailed)
+        } else {
+            Ok(e)
+        }
     }
 }
 
@@ -67,53 +75,19 @@ impl Drop for Env {
     }
 }
 
-impl Env {
-    /// Creates a new environment with the given dimensions.
-    pub fn new(i32s: slot::Reservation<i32>) -> err::Result<Self> {
-        let mut e = Env { p: ptr::null_mut() };
-        unsafe {
-            e.p = alloc_env(i32s.atomic, i32s.non_atomic);
-        }
-        if e.p.is_null() {
-            Err(err::Error::EnvAllocFailed)
-        } else {
-            Ok(e)
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::{
-        model::slot::{Reservation, Slot},
-        testapi::abs::Env,
-    };
+    use crate::{api::abs::test_helpers, err};
 
     #[test]
-    /// Tests storing and loading a 32-bit atomic integer.
-    fn test_store_load_atomic_i32() {
-        let slot = Slot {
-            index: 0,
-            is_atomic: true,
-        };
-        let mut env = super::Env::new(Reservation::of_slots(vec![slot].into_iter())).unwrap();
-
-        assert_eq!(0, env.get_i32(slot));
-        env.set_i32(slot, 42);
-        assert_eq!(42, env.get_i32(slot));
+    /// Tests getting and setting a 32-bit atomic integer.
+    fn test_get_set_atomic_i32() -> err::Result<()> {
+        test_helpers::test_i32_get_set::<super::Env>(true)
     }
 
     #[test]
-    /// Tests storing and loading a 32-bit integer.
-    fn test_store_load_i32() {
-        let slot = Slot {
-            index: 0,
-            is_atomic: false,
-        };
-        let mut env = super::Env::new(Reservation::of_slots(vec![slot].into_iter())).unwrap();
-
-        assert_eq!(0, env.get_i32(slot));
-        env.set_i32(slot, 42);
-        assert_eq!(42, env.get_i32(slot));
+    /// Tests getting and setting a 32-bit integer.
+    fn test_get_set_i32() -> err::Result<()> {
+        test_helpers::test_i32_get_set::<super::Env>(false)
     }
 }

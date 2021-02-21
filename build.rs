@@ -1,3 +1,4 @@
 fn main() {
-    cc::Build::new().file("src/testapi/c/env.c").compile("env");
+    println!("cargo:rerun-if-changed=src/api/c/env.c");
+    cc::Build::new().file("src/api/c/env.c").compile("env");
 }

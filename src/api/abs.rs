@@ -36,8 +36,8 @@ pub trait Entry<'a>: Clone + 'a {
 /// This trait currently mainly exists to hide parts of the actual environment
 /// that aren't thread-safe to run, but may be more useful later on.
 pub trait Env: Sized {
-    /// Constructs an environment for the given manifest.
-    fn for_manifest(m: &model::manifest::Manifest) -> err::Result<Self>;
+    /// Constructs an environment for the given slot reservations.
+    fn of_reservations(r: model::slot::ReservationSet) -> err::Result<Self>;
 
     /// Gets the 32-bit integer in the given slot.
     /// Assumes that the implementation does range checking and returns a
@@ -46,4 +46,29 @@ pub trait Env: Sized {
 
     /// Sets the 32-bit integer in the given slot to value v.
     fn set_i32(&mut self, slot: model::slot::Slot, v: i32);
+}
+
+#[cfg(test)]
+pub mod test_helpers {
+    use crate::{
+        err,
+        model::slot::{Reservation, ReservationSet, Slot},
+    };
+
+    pub fn test_i32_get_set<E: super::Env>(is_atomic: bool) -> err::Result<()> {
+        let slot = Slot {
+            index: 0,
+            is_atomic,
+        };
+        let reservation = ReservationSet {
+            i32s: Reservation::of_slots(vec![slot].into_iter()),
+        };
+        let mut env = E::of_reservations(reservation)?;
+
+        assert_eq!(0, env.get_i32(slot));
+        env.set_i32(slot, 42);
+        assert_eq!(42, env.get_i32(slot));
+
+        Ok(())
+    }
 }

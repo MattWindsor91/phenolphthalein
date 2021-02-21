@@ -1,7 +1,7 @@
 use dlopen::symbor::{Container, Ref, SymBorApi, Symbol};
 
 use super::{env, manifest};
-use crate::{err, model, testapi::abs};
+use crate::{api::abs, err, model};
 
 /// Entry point for C-ABI tests coming from dynamically loaded libraries.
 #[derive(SymBorApi, Clone)]

@@ -1,5 +1,5 @@
 //! Test manifests.
-use super::slot::{Reservation, Slot};
+use super::slot::{Reservation, ReservationSet, Slot};
 use std::collections::BTreeMap;
 
 /// A test manifest, describing properties of a test.
@@ -12,9 +12,12 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    /// Constructs a slot reservation wide enough for the i32s in this manifest.
-    pub fn reserve_i32s(&self) -> Reservation<i32> {
-        reserve_var_map(&self.i32s)
+    /// Constructs a slot reservation wide enough for the variables in this
+    /// manifest.
+    pub fn reserve(&self) -> ReservationSet {
+        ReservationSet {
+            i32s: reserve_var_map(&self.i32s),
+        }
     }
 }
 

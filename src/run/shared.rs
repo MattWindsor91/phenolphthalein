@@ -4,7 +4,7 @@
 //! synchronisers in `sync` also synchronise access to this.
 
 use super::{halt, obs};
-use crate::{model, testapi::abs};
+use crate::{api::abs, model};
 
 /// The shared state available to runner threads whenever they get promoted to
 /// observers.

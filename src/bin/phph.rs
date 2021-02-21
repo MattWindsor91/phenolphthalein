@@ -4,9 +4,8 @@ extern crate clap;
 use std::io;
 
 use phenolphthalein::{
-    model, run,
-    testapi::{abs::Test, c},
-    ux,
+    api::{c, Test},
+    model, run, ux,
     ux::report::Dumper,
 };
 

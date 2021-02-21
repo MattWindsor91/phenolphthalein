@@ -50,3 +50,9 @@ impl<T: Default> Reservation<T> {
         slots.fold(Reservation::default(), Self::add_slot)
     }
 }
+
+/// A set of slot reservations.
+pub struct ReservationSet {
+    /// The reservations for 32-bit integers.
+    pub i32s: Reservation<i32>,
+}

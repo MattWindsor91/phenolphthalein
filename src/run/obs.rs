@@ -1,4 +1,4 @@
-use crate::{err, model, testapi::abs};
+use crate::{api, err, model};
 
 /* TODO(@MattWindsor91): morally, a State should only borrow the variable names,
    as they are held by the parent Observer's Manifest for the entire scope that
@@ -22,7 +22,7 @@ impl Observer {
     }
 
     /// Observes a test environment into this runner's observations.
-    pub fn observe<'a, E: abs::Env>(
+    pub fn observe<'a, E: api::Env>(
         &mut self,
         env: &mut Manifested<E>,
         checker: &'a dyn model::check::Checker<E>,
@@ -35,7 +35,7 @@ impl Observer {
         }
     }
 
-    fn observe_state<'a, E: abs::Env>(
+    fn observe_state<'a, E: api::Env>(
         &mut self,
         env: &mut Manifested<E>,
         checker: &'a dyn model::check::Checker<E>,
@@ -49,7 +49,7 @@ impl Observer {
         info
     }
 
-    fn observe_state_for_first_time<'a, E: abs::Env>(
+    fn observe_state_for_first_time<'a, E: api::Env>(
         &self,
         env: &E,
         checker: &'a dyn model::check::Checker<E>,
@@ -74,7 +74,7 @@ impl Observer {
 
 /// Gets the current state of the environment.
 /// Note that this is not thread-safe until all test threads are synchronised.
-fn current_state<T: abs::Env>(env: &Manifested<T>) -> model::obs::State {
+fn current_state<T: api::Env>(env: &Manifested<T>) -> model::obs::State {
     let mut s = model::obs::State::new();
     // TODO(@MattWindsor91): have one great big iterator for values and collect it.
     s.extend(env.i32_values());
@@ -107,7 +107,7 @@ pub struct Manifested<E> {
     pub env: E,
 }
 
-impl<E: abs::Env> Manifested<E> {
+impl<E: api::Env> Manifested<E> {
     /// Resets the environment to the initial values in the manifest.
     pub fn reset(&mut self) {
         for r in self.manifest.i32s.values() {
@@ -125,7 +125,7 @@ impl<E: abs::Env> Manifested<E> {
 
     /// Constructs a manifested environment for a given manifest.
     pub fn for_manifest(manifest: model::manifest::Manifest) -> err::Result<Manifested<E>> {
-        let env = E::for_manifest(&manifest)?;
+        let env = E::of_reservations(manifest.reserve())?;
         Ok(Self { manifest, env })
     }
 }

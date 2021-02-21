@@ -1,7 +1,7 @@
 //! The main testing finite state automaton, and helper functions for it.
 
 use super::{halt, shared, sync};
-use crate::{err, testapi::abs::Entry};
+use crate::{api::Entry, err};
 use rand::seq::SliceRandom;
 use std::cell::UnsafeCell;
 use std::sync::{
