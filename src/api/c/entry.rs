@@ -18,9 +18,9 @@ pub struct Checker<'a> {
     sym: Symbol<'a, unsafe extern "C" fn(env: *const env::UnsafeEnv) -> bool>,
 }
 
-impl<'a> model::check::Checker<env::Env> for Checker<'a> {
-    fn check(&self, e: &env::Env) -> model::check::Outcome {
-        model::check::Outcome::from_pass_bool(unsafe { (self.sym)(e.p) })
+impl<'a> abs::Checker<env::Env> for Checker<'a> {
+    fn check(&self, e: &env::Env) -> model::Outcome {
+        model::Outcome::from_pass_bool(unsafe { (self.sym)(e.p) })
     }
 }
 
@@ -36,11 +36,11 @@ impl<'a> abs::Entry<'a> for Entry<'a> {
     }
 
     /// Gets a checker for this test.
-    fn checker(&self) -> Box<dyn model::check::Checker<Self::Env> + 'a> {
+    fn checker(&self) -> Box<dyn abs::Checker<Self::Env> + 'a> {
         if let Some(sym) = self.check {
             Box::new(Checker { sym })
         } else {
-            Box::new(model::check::Outcome::Unknown)
+            Box::new(model::Outcome::Unknown)
         }
     }
 }

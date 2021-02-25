@@ -25,7 +25,7 @@ impl Observer {
     pub fn observe<'a, E: api::Env>(
         &mut self,
         env: &mut Manifested<E>,
-        checker: &'a dyn model::check::Checker<E>,
+        checker: &'a dyn api::Checker<E>,
     ) -> Summary {
         let info = self.observe_state(env, checker);
         self.iterations = self.iterations.saturating_add(1);
@@ -38,7 +38,7 @@ impl Observer {
     fn observe_state<'a, E: api::Env>(
         &mut self,
         env: &mut Manifested<E>,
-        checker: &'a dyn model::check::Checker<E>,
+        checker: &'a dyn api::Checker<E>,
     ) -> model::obs::Obs {
         let state = current_state(env);
         let info = self.obs.get(&state).map_or_else(
@@ -52,19 +52,23 @@ impl Observer {
     fn observe_state_for_first_time<'a, E: api::Env>(
         &self,
         env: &E,
-        checker: &'a dyn model::check::Checker<E>,
+        checker: &'a dyn api::Checker<E>,
     ) -> model::obs::Obs {
-        let check_result = checker.check(env);
+        let outcome = checker.check(env);
         model::obs::Obs {
             occurs: 1,
-            check_result,
+            outcome,
             iteration: self.iterations,
         }
     }
 
     /// Consumes this Observer and returns a summary of its state.
     pub fn into_report(self) -> model::obs::Report {
-        let outcome = self.obs.iter().map(|(_, v)| v.check_result).max();
+        let outcome = self
+            .obs
+            .values()
+            .max_by_key(|v| v.outcome)
+            .map(|v| v.outcome);
         model::obs::Report {
             outcome,
             obs: self.obs,

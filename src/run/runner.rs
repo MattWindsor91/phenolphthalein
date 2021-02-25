@@ -1,10 +1,14 @@
 //! The high-level test runner.
 //!
-use super::{fsa, fsa::Fsa, halt, obs, shared, sync};
+use super::{
+    fsa, halt, obs,
+    permute::{HasTid, Permuter},
+    shared, sync,
+};
 use crate::{api::abs, err, model};
 
 /// A builder for tests.
-pub struct Builder<T> {
+pub struct Builder<'a, T: abs::Entry<'a>> {
     // TODO(@MattWindsor91): use the actual builder pattern here.
     /// The halting rules that should be applied to tests run by this runner.
     pub halt_rules: Vec<halt::Rule>,
@@ -15,34 +19,24 @@ pub struct Builder<T> {
     /// A cloneable entry into the test.
     pub entry: T,
 
-    /// Whether we should enable state checking.
-    pub check: bool,
+    /// The factory function to use to construct a checker.
+    pub check: abs::check::Factory<'a, T, T::Env>,
 
-    /// Whether we should permute threads at each thread rotation.
-    pub permute_threads: bool,
+    /// The permuter to use for permuting threads.
+    pub permuter: Box<dyn Permuter<fsa::Ready<'a, T>>>,
 }
 
-impl<'a, T: abs::Entry<'a>> Builder<T> {
+impl<'a, T: abs::Entry<'a>> Builder<'a, T> {
     pub fn build(self) -> err::Result<Runner<'a, T>> {
         let manifest = self.entry.make_manifest()?;
         let shared = self.make_shared_state(manifest)?;
         let automata = fsa::Set::new(self.entry.clone(), self.sync, shared)?;
 
-        let permuter = self.permuter();
-
         Ok(Runner {
             automata: Some(automata),
-            permuter,
+            permuter: self.permuter,
             report: None,
         })
-    }
-
-    fn permuter(&self) -> Box<dyn fsa::Permuter<'a, T> + 'a> {
-        if self.permute_threads {
-            Box::new(rand::thread_rng())
-        } else {
-            Box::new(fsa::NopPermuter {})
-        }
     }
 
     fn make_shared_state(
@@ -56,24 +50,16 @@ impl<'a, T: abs::Entry<'a>> Builder<T> {
         Ok(shared::State {
             halt_rules: self.halt_rules.clone(),
             observer,
-            checker: self.make_checker(),
+            checker: (self.check)(&self.entry),
             env,
         })
-    }
-
-    fn make_checker(&self) -> Box<dyn model::check::Checker<T::Env> + 'a> {
-        if self.check {
-            self.entry.checker()
-        } else {
-            Box::new(model::check::Outcome::Unknown)
-        }
     }
 }
 
 pub struct Runner<'a, T: abs::Entry<'a>> {
     automata: Option<fsa::Set<'a, T>>,
     report: Option<model::obs::Report>,
-    permuter: Box<dyn fsa::Permuter<'a, T> + 'a>,
+    permuter: Box<dyn Permuter<fsa::Ready<'a, T>> + 'a>,
 }
 
 impl<'a, 'scope> fsa::Threader<'a, 'scope> for &'scope crossbeam::thread::Scope<'a> {

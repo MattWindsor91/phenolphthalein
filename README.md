@@ -22,16 +22,39 @@ something like:
 
 ```shell
 $ clang -dynamiclib -std=c11 -pedantic -O3 -o test.dylib test.c
-$ cargo run --release test.dylib
+$ cargo run --release [OPTIONS] test.dylib
 ```
 
 ### Options
 
-- `--iterations=N`: run `N` many iterations in total;
-- `--period=N`: switch threads every `N` iterations;
+`phph` accepts several arguments:
+
+- `--iterations=N`: run `N` many iterations in total (set to `0` to disable
+  iteration cap)
+- `--period=N`: join and re-create threads every `N` iterations
+  (set to `0` to disable thread rotation)
+- `--check=TYPE`: control how phenolphthalein checks states against the test's
+  postcondition: `disable` checks entirely; `report` the check outcomes per
+  state; or `exit-on-pass`, `exit-on-fail`, or `exit-on-unknown` to abort the
+  test when a particular outcome arrives
+- `--permute=TYPE`: control the order in which phenolphthalein launches threads:
+  either `static` or `random`
 - `--sync=TYPE`: synchronise threads with a spinlock (`spinner`, default) or
   a full Rust barrier (`barrier`); `spinner` is faster and tends to show more
-  weak behaviour, but `barrier` is perhaps 'safer'.
+  weak behaviour, but `barrier` is perhaps 'safer'
+
+## How can I help?
+
+All contributions are welcome!  Check the GitHub issues page for specific
+things that need work.  General areas of development include:
+
+- feature parity with litmus7 (though we don't intend to support
+  every litmus7 feature, given the different focus for phenolphthalein);
+- speed of test turnaround (likely taking hints from litmus7);
+- ability to discover weak behaviours (likely also taking hints from litmus7); 
+- reducing test boilerplate, to make it straightforward to write hand-written
+  tests against phenolphthalein;
+- supporting boilerplate and ABIs for more languages (C++, Rust, Go?)
 
 ## Why is it called phenolphthalein?
 

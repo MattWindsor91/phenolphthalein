@@ -47,17 +47,17 @@ impl HistogramDumper {
             tw,
             "{occ}\t{sigil}>\t{state}\t(iter {iter})",
             occ = obs.occurs,
-            sigil = self.check_sigil(obs.check_result),
+            sigil = self.check_sigil(obs.outcome),
             state = state_str,
             iter = obs.iteration,
         )?)
     }
 
-    fn check_sigil(&self, r: model::check::Outcome) -> colored::ColoredString {
+    fn check_sigil(&self, r: model::Outcome) -> colored::ColoredString {
         match r {
-            model::check::Outcome::Passed => "*".green(),
-            model::check::Outcome::Failed => ":".red(),
-            model::check::Outcome::Unknown => "?".yellow(),
+            model::Outcome::Pass => "*".green(),
+            model::Outcome::Fail => ":".red(),
+            model::Outcome::Unknown => "?".yellow(),
         }
     }
 }

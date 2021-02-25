@@ -1,19 +1,16 @@
 //! The main testing finite state automaton, and helper functions for it.
 
-use super::{halt, shared, sync};
+use super::{
+    halt,
+    permute::{HasTid, Permuter},
+    shared, sync,
+};
 use crate::{api::Entry, err};
-use rand::seq::SliceRandom;
 use std::cell::UnsafeCell;
 use std::sync::{
     atomic::{AtomicU8, Ordering},
     Arc,
 };
-
-/// Common functionality for states in the testing finite automaton.
-pub trait Fsa {
-    /// Gets the ID of the test thread to which this automaton state belongs.
-    fn tid(&self) -> usize;
-}
 
 /// A test handle that is ready to send to its thread.
 pub struct Ready<'a, T: Entry<'a>>(Inner<'a, T>);
@@ -41,7 +38,7 @@ unsafe impl<'a, T: Entry<'a>> Send for Ready<'a, T> {}
 /// See the Sync implementation for the handwave.
 unsafe impl<'a, T: Entry<'a>> Sync for Ready<'a, T> {}
 
-impl<'a, T: Entry<'a>> Fsa for Ready<'a, T> {
+impl<'a, T: Entry<'a>> HasTid for Ready<'a, T> {
     fn tid(&self) -> usize {
         self.0.tid
     }
@@ -50,7 +47,7 @@ impl<'a, T: Entry<'a>> Fsa for Ready<'a, T> {
 /// A test handle that is in the runnable position.
 pub struct Runnable<'a, T: Entry<'a>>(Inner<'a, T>);
 
-impl<'a, T: Entry<'a>> Fsa for Runnable<'a, T> {
+impl<'a, T: Entry<'a>> HasTid for Runnable<'a, T> {
     fn tid(&self) -> usize {
         self.0.tid
     }
@@ -92,7 +89,7 @@ pub enum RunOutcome<'a, T: Entry<'a>> {
 /// A test handle that is in the waiting position.
 pub struct Waiting<'a, T: Entry<'a>>(Inner<'a, T>);
 
-impl<'a, T: Entry<'a>> Fsa for Waiting<'a, T> {
+impl<'a, T: Entry<'a>> HasTid for Waiting<'a, T> {
     fn tid(&self) -> usize {
         self.0.tid
     }
@@ -108,7 +105,7 @@ impl<'a, T: Entry<'a>> Waiting<'a, T> {
 /// A test handle that is in the observable position.
 pub struct Observable<'a, T: Entry<'a>>(Inner<'a, T>);
 
-impl<'a, T: Entry<'a>> Fsa for Observable<'a, T> {
+impl<'a, T: Entry<'a>> HasTid for Observable<'a, T> {
     fn tid(&self) -> usize {
         self.0.tid
     }
@@ -151,7 +148,7 @@ pub struct Done {
     pub halt_type: halt::Type,
 }
 
-impl Fsa for Done {
+impl HasTid for Done {
     fn tid(&self) -> usize {
         self.tid
     }
@@ -270,7 +267,7 @@ impl<'a, T: Entry<'a>> Set<'a, T> {
     /// of a test on multiple thread configurations, and attempts to prevent
     /// unsafe parallel usage of more FSAs at once than the test was built to
     /// handle.
-    pub fn run<'scope, R: Threader<'a, 'scope>, P: Permuter<'a, T> + ?Sized>(
+    pub fn run<'scope, R: Threader<'a, 'scope>, P: Permuter<Ready<'a, T>> + ?Sized>(
         self,
         threader: &'scope R,
         permuter: &mut P,
@@ -285,7 +282,7 @@ impl<'a, T: Entry<'a>> Set<'a, T> {
     /// necessary, and uses the threader to spawn a threadlike object.
     ///
     /// Ensures each thread will be spawned before returning.
-    fn spawn_all<'scope, R: Threader<'a, 'scope>, P: Permuter<'a, T> + ?Sized>(
+    fn spawn_all<'scope, R: Threader<'a, 'scope>, P: Permuter<Ready<'a, T>> + ?Sized>(
         &self,
         threader: &'scope R,
         permuter: &mut P,
@@ -350,29 +347,6 @@ pub enum Outcome<'a, T: Entry<'a>> {
     /// inspection.
     Exit(shared::State<'a, T::Env>),
 }
-
-/// Trait for things that can permute threads.
-pub trait Permuter<'a, E: Entry<'a>> {
-    /// Permutes a set of ready automata.
-    ///
-    /// Given that the FSA set presents each automaton to the thread runner
-    /// in order, this can be used to change thread ordering or affinity.
-    fn permute(&mut self, threads: &mut [Ready<'a, E>]);
-}
-
-impl<'a, T: rand::Rng + ?Sized, E: Entry<'a>> Permuter<'a, E> for T {
-    fn permute(&mut self, threads: &mut [Ready<'a, E>]) {
-        threads.shuffle(self)
-    }
-}
-
-// A permuter that doesn't actually permute.
-pub struct NopPermuter {}
-
-impl<'a, E: Entry<'a>> Permuter<'a, E> for NopPermuter {
-    fn permute(&mut self, _: &mut [Ready<'a, E>]) {}
-}
-
 /// Trait for things that can 'run' a test automaton as a thread.
 pub trait Threader<'a, 'scope> {
     /// The type of thread handles.

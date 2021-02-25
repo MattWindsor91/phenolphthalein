@@ -5,8 +5,8 @@ use std::io;
 
 use phenolphthalein::{
     api::{c, Test},
-    model, run, ux,
-    ux::report::Dumper,
+    config, model, run,
+    ux::report::{Dumper, HistogramDumper},
 };
 
 use clap::{App, Arg};
@@ -24,44 +24,45 @@ fn app<'a, 'b>() -> App<'a, 'b> {
         .version(crate_version!())
         .about("Concurrency test runner")
         .arg(
-            Arg::with_name("no_permute_threads")
-                .help("Don't permute thread assignments each period")
-                .short("-P")
-                .long("--no-permute-threads"),
+            Arg::with_name(config::clap::arg::CHECK)
+                .help("Checking strategy to use")
+                .short("-c")
+                .long("--check")
+                .value_name("STRATEGY")
+                .possible_values(config::check::string::ALL),
         )
         .arg(
-            Arg::with_name("no_check")
-                .help("Disable all checking of states")
-                .short("-C")
-                .long("--no-check"),
+            Arg::with_name(config::clap::arg::PERMUTE)
+                .help("Permuting strategy to use")
+                .short("-p")
+                .long("--permute")
+                .value_name("STRATEGY")
+                .possible_values(config::permute::string::ALL),
         )
         .arg(
-            Arg::with_name("sync")
-                .help("Synchronisation method to use")
+            Arg::with_name(config::clap::arg::SYNC)
+                .help("Synchronisation strategy to use")
                 .short("-s")
                 .long("--sync")
-                .value_name("METHOD")
-                .default_value(ux::args::SYNC_SPINNER)
-                .possible_values(ux::args::SYNC_ALL),
+                .value_name("STRATEGY")
+                .possible_values(config::sync::string::ALL),
         )
         .arg(
-            Arg::with_name(ux::args::ARG_ITERATIONS)
+            Arg::with_name(config::clap::arg::ITERATIONS)
                 .help("Iterations to perform in total")
                 .short("-i")
                 .long("--iterations")
-                .value_name("NUM")
-                .default_value("100000"),
+                .value_name("NUM"),
         )
         .arg(
-            Arg::with_name(ux::args::ARG_PERIOD)
+            Arg::with_name(config::clap::arg::PERIOD)
                 .help("rotate threads after each NUM iterations")
                 .short("-p")
                 .long("--period")
-                .value_name("NUM")
-                .default_value("10000"),
+                .value_name("NUM"),
         )
         .arg(
-            Arg::with_name(ux::args::ARG_INPUT)
+            Arg::with_name(config::clap::arg::INPUT)
                 .help("The input file (.so, .dylib) to use")
                 .required(true)
                 .index(1),
@@ -69,23 +70,26 @@ fn app<'a, 'b>() -> App<'a, 'b> {
 }
 
 fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
-    run_with_args(ux::args::Args::parse(&matches)?)
+    use config::clap::Clappable;
+
+    let config = config::Config::default().parse_clap(&matches)?;
+    run_with_config(config)
 }
 
-fn run_with_args(args: ux::args::Args) -> anyhow::Result<()> {
-    let test = c::Test::load(args.input)?;
+fn run_with_config(config: config::Config) -> anyhow::Result<()> {
+    let test = c::Test::load(config.input)?;
 
-    let mut halt_rules = args.halt_rules();
+    let mut halt_rules: Vec<run::halt::Rule> = config.halt_rules().collect();
     halt_rules.push(setup_ctrlc()?);
 
-    let sync = args.sync_factory();
+    let sync = config.sync.to_factory();
 
     let report = run::Builder {
         halt_rules,
         sync,
         entry: test.spawn(),
-        check: args.check,
-        permute_threads: args.permute_threads,
+        check: config.check.to_factory(),
+        permuter: config.permute.to_permuter(),
     }
     .build()?
     .run()?;
@@ -95,7 +99,7 @@ fn run_with_args(args: ux::args::Args) -> anyhow::Result<()> {
 }
 
 fn dump_report<W: io::Write>(w: W, r: model::obs::Report) -> anyhow::Result<()> {
-    ux::report::HistogramDumper {}.dump(w, r)?;
+    HistogramDumper {}.dump(w, r)?;
     Ok(())
 }
 

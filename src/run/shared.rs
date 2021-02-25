@@ -4,13 +4,13 @@
 //! synchronisers in `sync` also synchronise access to this.
 
 use super::{halt, obs};
-use crate::{api::abs, model};
+use crate::api::abs;
 
 /// The shared state available to runner threads whenever they get promoted to
 /// observers.
 pub struct State<'a, E> {
     /// The state checker for the test.
-    pub checker: Box<dyn model::check::Checker<E> + 'a>,
+    pub checker: Box<dyn abs::Checker<E> + 'a>,
     /// The manifested environment.
     pub env: obs::Manifested<E>,
     /// The halt rules for the test.

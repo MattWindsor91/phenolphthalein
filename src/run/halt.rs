@@ -1,10 +1,13 @@
 //! Ways to temporarily or permanently halt a running test.
 
 use super::obs;
-use crate::model::check::Outcome;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use crate::model::Outcome;
+use std::{
+    num::NonZeroUsize,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 /// A pair of halt condition and halt type.
@@ -35,7 +38,7 @@ impl Rule {
 pub enum Condition {
     /// The test should halt when the iteration count reaches this
     /// a multiple of this number.
-    EveryNIterations(usize),
+    EveryNIterations(NonZeroUsize),
     /// The test should halt when this flag goes high.
     OnSignal(Arc<AtomicBool>),
     /// The test should halt when the first outcome of this type occurs.
@@ -71,9 +74,9 @@ impl Condition {
     /// Checks to see if this condition holds over `obs`.
     pub fn check(&self, os: &obs::Summary) -> bool {
         match self {
-            Self::EveryNIterations(n) => os.iterations % *n == 0,
+            Self::EveryNIterations(n) => os.iterations % n.get() == 0,
             Self::OnSignal(s) => s.load(Ordering::Acquire),
-            Self::OnOutcome(o) => os.info.check_result == *o,
+            Self::OnOutcome(o) => os.info.outcome == *o,
         }
     }
 }

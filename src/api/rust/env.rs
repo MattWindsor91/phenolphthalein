@@ -69,20 +69,25 @@ impl SlotAtomic<i32> for AtomicI32 {
 impl<A: SlotAtomic<T>, T: Copy + Default> Slotset<A, T> {
     pub fn get(&self, slot: slot::Slot) -> T {
         if slot.is_atomic {
-            if let Some(s) = self.atomic.get(slot.index) {
-                s.slot_load()
-            } else {
-                Default::default()
-            }
-        } else if let Some(s) = self.non_atomic.get(slot.index) {
-            /* TODO(@MattWindsor91): is this sound?  The rationale would be
-            that any mutable borrows of this by phph itself will be behind
-            a mutable reference to the Slotset, and any mutable borrows by
-            the test are for the test writer to assert safety over. */
-            unsafe { *s.get() }
+            self.get_atomic(slot.index)
         } else {
-            Default::default()
+            self.get_non_atomic(slot.index)
         }
+    }
+
+    fn get_atomic(&self, index: usize) -> T {
+        self.atomic.get(index).map(A::slot_load).unwrap_or_default()
+    }
+
+    fn get_non_atomic(&self, index: usize) -> T {
+        /* TODO(@MattWindsor91): is this sound?  The rationale would be
+        that any mutable borrows of this by phph itself will be behind
+        a mutable reference to the Slotset, and any mutable borrows by
+        the test are for the test writer to assert safety over. */
+        self.non_atomic
+            .get(index)
+            .map(|s| unsafe { *s.get() })
+            .unwrap_or_default()
     }
 
     pub fn set(&mut self, slot: slot::Slot, v: T) {

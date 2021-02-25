@@ -4,6 +4,10 @@
 //! implement.
 use crate::{err, model};
 
+pub mod check;
+
+pub use check::Checker;
+
 /// Trait of top-level tests.
 ///
 /// Each test can spawn multiple entry points into itself.
@@ -28,7 +32,7 @@ pub trait Entry<'a>: Clone + 'a {
     fn run(&self, tid: usize, e: &Self::Env);
 
     /// Gets a checker for this entry point's environments.
-    fn checker(&self) -> Box<dyn model::check::Checker<Self::Env> + 'a>;
+    fn checker(&self) -> Box<dyn check::Checker<Self::Env> + 'a>;
 }
 
 /// Trait of medium-level handles to an observable test environment.
@@ -54,6 +58,7 @@ pub mod test_helpers {
         err,
         model::slot::{Reservation, ReservationSet, Slot},
     };
+    use std::iter::once;
 
     pub fn test_i32_get_set<E: super::Env>(is_atomic: bool) -> err::Result<()> {
         let slot = Slot {
@@ -61,7 +66,7 @@ pub mod test_helpers {
             is_atomic,
         };
         let reservation = ReservationSet {
-            i32s: Reservation::of_slots(vec![slot].into_iter()),
+            i32s: Reservation::of_slots(once(slot).into_iter()),
         };
         let mut env = E::of_reservations(reservation)?;
 

@@ -1,4 +1,4 @@
-use super::check;
+use super::outcome;
 use std::collections::{BTreeMap, HashMap};
 
 /// An observed state.
@@ -20,7 +20,7 @@ pub struct Obs {
     /// The number of times this state has occurred.
     pub occurs: usize,
     /// The result of asking the test to check this state.
-    pub check_result: check::Outcome,
+    pub outcome: outcome::Outcome,
 }
 
 impl Obs {
@@ -37,7 +37,7 @@ impl Obs {
 /// A final report of observations coming from a test run.
 pub struct Report {
     /// The overall outcome of checks performed on states on this run.
-    pub outcome: Option<check::Outcome>,
+    pub outcome: Option<outcome::Outcome>,
 
     /// The full state observation set.
     pub obs: Set,
