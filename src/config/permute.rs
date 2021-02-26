@@ -2,6 +2,7 @@
 
 use super::err;
 use crate::run::{self, permute};
+use serde::{Deserialize, Serialize};
 
 /// String representations of checking strategies
 pub mod string {
@@ -17,12 +18,14 @@ pub mod string {
 }
 
 /// Enumeration of thread permutation methods.
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum Strategy {
     /// Randomly permute thread-automaton assignments on each rotation.
+    #[serde(rename = "random")]
     Random,
     /// Never permute.
+    #[serde(rename = "static")]
     Static,
 }
 

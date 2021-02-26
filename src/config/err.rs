@@ -25,6 +25,14 @@ pub enum Error {
     /// The user supplied a bad period.
     #[error("couldn't parse period: {0}")]
     BadPeriod(std::num::ParseIntError),
+
+    /// We couldn't deserialise the config from TOML.
+    #[error("couldn't parse config: {0}")]
+    Deserialize(#[from] toml::de::Error),
+
+    /// We couldn't serialise the config to TOML.
+    #[error("couldn't dump config: {0}")]
+    Serialize(#[from] toml::ser::Error),
 }
 
 /// Results over [Error].

@@ -2,6 +2,7 @@
 
 use super::err;
 use crate::run::sync;
+use serde::{Deserialize, Serialize};
 
 /// String representations of each strategy.
 pub mod string {
@@ -15,11 +16,13 @@ pub mod string {
 
 /// Enumeration of synchronisation strategy exported by the phenolphthalein
 /// toplevel.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub enum Strategy {
     /// Represents the spinner synchronisation strategy.
+    #[serde(rename = "spinner")]
     Spinner,
     /// Represents the barrier synchronisation strategy.
+    #[serde(rename = "barrier")]
     Barrier,
 }
 

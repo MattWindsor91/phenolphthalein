@@ -1,6 +1,7 @@
 //! Config for the tester's iteration counts, periods, and so on.
 
 use crate::run::halt;
+use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
 
 /// The default number of iterations in total.
@@ -10,13 +11,18 @@ const DEFAULT_PERIOD: usize = 100_000;
 
 /// The strategy used to handle iteration-based rotations and exits.
 #[non_exhaustive]
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "action")]
 pub enum Strategy {
     /// No halting based on iterations.
+    #[serde(rename = "no-halt")]
     NoHalt,
     /// Exit after the given number of iterations.
-    Exit(NonZeroUsize),
+    #[serde(rename = "exit")]
+    Exit { iterations: NonZeroUsize },
     /// Exit after the given number of iterations, and rotate after each
     /// multiple of the given period.
+    #[serde(rename = "exit-and-rotate")]
     ExitAndRotate {
         iterations: NonZeroUsize,
         period: NonZeroUsize,
@@ -47,7 +53,7 @@ impl Strategy {
     /// Gets the number of iterations defined by this strategy.
     pub fn iterations(&self) -> Option<NonZeroUsize> {
         match self {
-            Self::Exit(iterations) => Some(*iterations),
+            Self::Exit { iterations } => Some(*iterations),
             Strategy::ExitAndRotate { iterations, .. } => Some(*iterations),
             _ => None,
         }
@@ -65,7 +71,7 @@ impl Strategy {
     pub const fn from_ints(iterations: usize, period: usize) -> Self {
         match (NonZeroUsize::new(iterations), NonZeroUsize::new(period)) {
             (None, _) => Self::NoHalt,
-            (Some(iterations), None) => Self::Exit(iterations),
+            (Some(iterations), None) => Self::Exit { iterations },
             (Some(iterations), Some(period)) => Self::ExitAndRotate { iterations, period },
         }
     }

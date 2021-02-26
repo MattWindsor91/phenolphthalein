@@ -2,6 +2,7 @@
 
 use super::err;
 use crate::{api::abs, model::outcome, run::halt};
+use serde::{de::Visitor, Deserialize, Serialize};
 
 /// String representations of checking strategies.
 pub mod string {
@@ -85,6 +86,34 @@ impl std::fmt::Display for Strategy {
     }
 }
 
+/// Serialize by stringification.
+impl Serialize for Strategy {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+/// Deserialize by parsing.
+impl<'de> Deserialize<'de> for Strategy {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_str(StrategyVisitor)
+    }
+}
+
+struct StrategyVisitor;
+
+impl<'de> Visitor<'de> for StrategyVisitor {
+    type Value = Strategy;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(formatter, "one of: {}", string::ALL.join(", "))
+    }
+
+    fn visit_str<E: serde::de::Error>(self, v: &str) -> std::result::Result<Self::Value, E> {
+        Ok(v.parse().map_err(|x| E::custom(x))?)
+    }
+}
+
 impl Strategy {
     /// Gets an iterator of all available strategies.
     ///
@@ -133,10 +162,7 @@ impl Strategy {
     /// assert!(!Strategy::ExitOn(Outcome::Pass).is_disabled());
     /// ```
     pub fn is_disabled(&self) -> bool {
-        match self {
-            Self::Disable => true,
-            _ => false,
-        }
+        matches!(self, Self::Disable)
     }
 
     pub fn to_factory<'a, T: abs::Entry<'a>>(&self) -> abs::check::Factory<'a, T, T::Env> {

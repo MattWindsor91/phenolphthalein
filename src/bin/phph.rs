@@ -62,18 +62,33 @@ fn app<'a, 'b>() -> App<'a, 'b> {
                 .value_name("NUM"),
         )
         .arg(
+            Arg::with_name(DUMP_CONFIG)
+                .help("Dump config instead of testing")
+                .long("--dump-config"),
+        )
+        .arg(
             Arg::with_name(config::clap::arg::INPUT)
                 .help("The input file (.so, .dylib) to use")
-                .required(true)
+                .required_unless_one(&[DUMP_CONFIG])
                 .index(1),
         )
 }
+
+const DUMP_CONFIG: &str = "dump-config";
 
 fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
     use config::clap::Clappable;
 
     let config = config::Config::default().parse_clap(&matches)?;
-    run_with_config(config)
+    if matches.is_present(DUMP_CONFIG) {
+        dump_config(config)
+    } else {
+        run_with_config(config)
+    }
+}
+
+fn dump_config(config: config::Config) -> anyhow::Result<()> {
+    Ok(println!("{}", config.dump()?))
 }
 
 fn run_with_config(config: config::Config) -> anyhow::Result<()> {

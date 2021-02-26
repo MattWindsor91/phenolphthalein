@@ -1,5 +1,6 @@
 //! Outcomes of running checks on observations.
 
+use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr};
 
 /// The result of running a checker.
@@ -10,13 +11,16 @@ use std::{fmt::Display, str::FromStr};
 ///
 /// Outcomes are non-exhaustive, in the unlikely case that we add more.
 #[non_exhaustive]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Outcome {
     /// The observation passed its check.
+    #[serde(rename = "pass")]
     Pass,
     /// The observation failed its check.
+    #[serde(rename = "fail")]
     Fail,
     /// The observation has no determined outcome.
+    #[serde(rename = "unknown")]
     Unknown,
 }
 
