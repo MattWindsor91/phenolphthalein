@@ -88,7 +88,7 @@ fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
 }
 
 fn dump_config(config: config::Config) -> anyhow::Result<()> {
-    let s = config.dump()?;
+    let s = config.to_string()?;
     Ok(println!("{}", s))
 }
 

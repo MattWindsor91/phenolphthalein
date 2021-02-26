@@ -26,7 +26,12 @@ impl<'a> Config<'a> {
     }
 
     /// Tries to dump a config to a string.
-    pub fn dump(&self) -> err::Result<String> {
+    pub fn to_string(&self) -> err::Result<String> {
         Ok(toml::to_string_pretty(self)?)
+    }
+
+    /// Tries to load a config from a string.
+    pub fn from_str(s: &'a str) -> err::Result<Self> {
+        Ok(toml::from_str(s)?)
     }
 }
