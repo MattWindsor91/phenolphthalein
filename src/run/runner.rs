@@ -1,7 +1,7 @@
 //! The high-level test runner.
 //!
 use super::{
-    fsa, halt, obs,
+    fsa, halt, obs, permute,
     permute::{HasTid, Permuter},
     shared, sync,
 };
@@ -23,7 +23,7 @@ pub struct Builder<'a, T: abs::Entry<'a>> {
     checker: abs::check::Factory<'a, T, T::Env>,
 
     /// The permuter to use for permuting threads.
-    permuter: Box<dyn Permuter<fsa::Ready<'a, T>>>,
+    permuter: permute::Factory<fsa::Ready<'a, T>>,
 }
 
 impl<'a, T: abs::Entry<'a>> Builder<'a, T> {
@@ -33,8 +33,8 @@ impl<'a, T: abs::Entry<'a>> Builder<'a, T> {
             entry,
             halt_rules: vec![],
             sync: sync::make_spinner,
-            checker: abs::check::unknown_factory,
-            permuter: Box::new(super::permute::Nop),
+            checker: abs::check::make_unknown,
+            permuter: permute::make_nop,
         }
     }
 
@@ -57,19 +57,23 @@ impl<'a, T: abs::Entry<'a>> Builder<'a, T> {
     }
 
     /// Overrides this builder's permuter factory.
-    pub fn with_permuter(mut self, permuter: Box<dyn Permuter<fsa::Ready<'a, T>>>) -> Self {
+    pub fn with_permuter(mut self, permuter: permute::Factory<fsa::Ready<'a, T>>) -> Self {
         self.permuter = permuter;
         self
     }
 
-    pub fn build(self) -> err::Result<Runner<'a, T>> {
+    /// Builds a test runner with the stored configuration.
+    ///
+    /// Building doesn't take ownership of the builder, so it can be used to
+    /// run multiple (isolated) instances of the same test.
+    pub fn build(&self) -> err::Result<Runner<'a, T>> {
         let manifest = self.entry.make_manifest()?;
         let shared = self.make_shared_state(manifest)?;
         let automata = fsa::Set::new(self.entry.clone(), self.sync, shared)?;
 
         Ok(Runner {
             automata: Some(automata),
-            permuter: self.permuter,
+            permuter: (self.permuter)(),
             report: None,
         })
     }

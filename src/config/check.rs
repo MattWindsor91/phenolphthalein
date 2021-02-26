@@ -167,7 +167,7 @@ impl Strategy {
 
     pub fn to_factory<'a, T: abs::Entry<'a>>(&self) -> abs::check::Factory<'a, T, T::Env> {
         if self.is_disabled() {
-            abs::check::unknown_factory
+            abs::check::make_unknown
         } else {
             abs::Entry::checker
         }

@@ -1,6 +1,6 @@
 //! Traits for thread permutation.
 
-use rand::prelude::SliceRandom;
+use rand::{prelude::SliceRandom, thread_rng};
 
 /// Trait of things that have thread identifiers.
 pub trait HasTid {
@@ -29,4 +29,17 @@ pub struct Nop;
 
 impl<T: HasTid> Permuter<T> for Nop {
     fn permute(&mut self, _: &mut [T]) {}
+}
+
+/// Type alias of functions that return fully wrapped permuters.
+pub type Factory<T> = fn() -> Box<dyn Permuter<T>>;
+
+/// Makes a boxed permuter from the thread RNG.
+pub fn make_thread_rng<T: HasTid>() -> Box<dyn Permuter<T>> {
+    Box::new(thread_rng())
+}
+
+/// Makes a no-operation boxed permuter.
+pub fn make_nop<T: HasTid>() -> Box<dyn Permuter<T>> {
+    Box::new(Nop)
 }

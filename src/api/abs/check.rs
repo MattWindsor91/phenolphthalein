@@ -11,9 +11,6 @@ pub trait Checker<E>: Sync + Send {
     fn check(&self, env: &E) -> model::Outcome;
 }
 
-/// Type alias of functions that return fully wrapped synchronisers.
-pub type Factory<'a, S, E> = fn(&S) -> Box<dyn Checker<E> + 'a>;
-
 /// `Outcome`s can be trivial `Checker`s; they always return themselves.
 ///
 /// # Examples
@@ -31,11 +28,14 @@ impl<E> Checker<E> for model::Outcome {
     }
 }
 
+/// Type alias of functions that return fully wrapped synchronisers.
+pub type Factory<'a, S, E> = fn(&S) -> Box<dyn Checker<E> + 'a>;
+
 /// Constructs a checker for any environment type that just returns [model::Outcome::Unknown].
 ///
 /// This gains nothing over just using [model::Outcome::Unknown] as a checker, except that it is
 /// the right shape to be a [Factory].
-pub fn unknown_factory<'a, T, E>(_: &T) -> Box<dyn Checker<E> + 'a> {
+pub fn make_unknown<'a, T, E>(_: &T) -> Box<dyn Checker<E> + 'a> {
     Box::new(model::Outcome::Unknown)
 }
 

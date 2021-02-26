@@ -79,10 +79,11 @@ impl Strategy {
         vec![Self::Random, Self::Static].into_iter()
     }
 
-    pub fn to_permuter<T: run::permute::HasTid>(&self) -> Box<dyn run::Permuter<T>> {
+    /// Converts a permutation strategy to a factory.
+    pub fn to_factory<T: run::permute::HasTid>(&self) -> run::permute::Factory<T> {
         match self {
-            Self::Random => Box::new(rand::thread_rng()),
-            Self::Static => Box::new(permute::Nop {}),
+            Self::Random => permute::make_thread_rng,
+            Self::Static => permute::make_nop,
         }
     }
 }

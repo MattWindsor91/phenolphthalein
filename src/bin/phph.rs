@@ -106,7 +106,7 @@ fn run_entry<'a, E: api::abs::Entry<'a>>(
     Ok(run::Builder::new(entry)
         .add_halt_rules(config.halt_rules().chain(once(setup_ctrlc()?)))
         .with_checker(config.check.to_factory())
-        .with_permuter(config.permute.to_permuter())
+        .with_permuter(config.permute.to_factory())
         .with_sync(config.sync.to_factory())
         .build()?
         .run()?)
@@ -117,6 +117,7 @@ fn dump_report<W: io::Write>(w: W, r: model::obs::Report) -> anyhow::Result<()> 
     Ok(())
 }
 
+/// Creates a halt rule that exits the test if control-C is sent.
 fn setup_ctrlc() -> anyhow::Result<run::halt::Rule> {
     let (rule, callback) = run::halt::Rule::on_callback(run::halt::Type::Exit);
     ctrlc::set_handler(callback)?;
