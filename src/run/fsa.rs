@@ -5,7 +5,7 @@ use super::{
     permute::{HasTid, Permuter},
     shared, sync,
 };
-use crate::{api::Entry, err};
+use crate::{api::abs::Entry, err};
 use std::cell::UnsafeCell;
 use std::sync::{
     atomic::{AtomicU8, Ordering},

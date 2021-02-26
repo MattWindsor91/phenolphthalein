@@ -4,7 +4,7 @@ extern crate clap;
 use std::io;
 
 use phenolphthalein::{
-    api::{c, Test},
+    api::{abs::Test, c},
     config, model, run,
     ux::report::{Dumper, HistogramDumper},
 };

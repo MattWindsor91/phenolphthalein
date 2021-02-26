@@ -1,4 +1,4 @@
-use crate::{api, err, model};
+use crate::{api::abs, err, model};
 
 /* TODO(@MattWindsor91): morally, a State should only borrow the variable names,
    as they are held by the parent Observer's Manifest for the entire scope that
@@ -22,10 +22,10 @@ impl Observer {
     }
 
     /// Observes a test environment into this runner's observations.
-    pub fn observe<'a, E: api::Env>(
+    pub fn observe<'a, E: abs::Env>(
         &mut self,
         env: &mut Manifested<E>,
-        checker: &'a dyn api::Checker<E>,
+        checker: &'a dyn abs::Checker<E>,
     ) -> Summary {
         let info = self.observe_state(env, checker);
         self.iterations = self.iterations.saturating_add(1);
@@ -35,10 +35,10 @@ impl Observer {
         }
     }
 
-    fn observe_state<'a, E: api::Env>(
+    fn observe_state<'a, E: abs::Env>(
         &mut self,
         env: &mut Manifested<E>,
-        checker: &'a dyn api::Checker<E>,
+        checker: &'a dyn abs::Checker<E>,
     ) -> model::obs::Obs {
         let state = current_state(env);
         let info = self.obs.get(&state).map_or_else(
@@ -49,10 +49,10 @@ impl Observer {
         info
     }
 
-    fn observe_state_for_first_time<'a, E: api::Env>(
+    fn observe_state_for_first_time<'a, E: abs::Env>(
         &self,
         env: &E,
-        checker: &'a dyn api::Checker<E>,
+        checker: &'a dyn abs::Checker<E>,
     ) -> model::obs::Obs {
         let outcome = checker.check(env);
         model::obs::Obs {
@@ -78,7 +78,7 @@ impl Observer {
 
 /// Gets the current state of the environment.
 /// Note that this is not thread-safe until all test threads are synchronised.
-fn current_state<T: api::Env>(env: &Manifested<T>) -> model::obs::State {
+fn current_state<T: abs::Env>(env: &Manifested<T>) -> model::obs::State {
     let mut s = model::obs::State::new();
     // TODO(@MattWindsor91): have one great big iterator for values and collect it.
     s.extend(env.i32_values());
@@ -111,7 +111,7 @@ pub struct Manifested<E> {
     pub env: E,
 }
 
-impl<E: api::Env> Manifested<E> {
+impl<E: abs::Env> Manifested<E> {
     /// Resets the environment to the initial values in the manifest.
     pub fn reset(&mut self) {
         for r in self.manifest.i32s.values() {
