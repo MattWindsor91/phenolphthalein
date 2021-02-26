@@ -1,10 +1,10 @@
 #[macro_use]
 extern crate clap;
 
-use std::io;
+use std::{io, iter::once};
 
 use phenolphthalein::{
-    api::{abs::Test, c},
+    api::{self, abs::Test, c},
     config, model, run,
     ux::report::{Dumper, HistogramDumper},
 };
@@ -83,34 +83,33 @@ fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
     if matches.is_present(DUMP_CONFIG) {
         dump_config(config)
     } else {
-        run_with_config(config)
+        run_test(config)
     }
 }
 
 fn dump_config(config: config::Config) -> anyhow::Result<()> {
-    Ok(println!("{}", config.dump()?))
+    let s = config.dump()?;
+    Ok(println!("{}", s))
 }
 
-fn run_with_config(config: config::Config) -> anyhow::Result<()> {
+fn run_test(config: config::Config) -> anyhow::Result<()> {
     let test = c::Test::load(config.input)?;
-
-    let mut halt_rules: Vec<run::halt::Rule> = config.halt_rules().collect();
-    halt_rules.push(setup_ctrlc()?);
-
-    let sync = config.sync.to_factory();
-
-    let report = run::Builder {
-        halt_rules,
-        sync,
-        entry: test.spawn(),
-        check: config.check.to_factory(),
-        permuter: config.permute.to_permuter(),
-    }
-    .build()?
-    .run()?;
-
+    let report = run_entry(config, test.spawn())?;
     // TODO(@MattWindsor91): don't hardcode this
     dump_report(std::io::stdout(), report)
+}
+
+fn run_entry<'a, E: api::abs::Entry<'a>>(
+    config: config::Config,
+    entry: E,
+) -> anyhow::Result<model::obs::Report> {
+    Ok(run::Builder::new(entry)
+        .add_halt_rules(config.halt_rules().chain(once(setup_ctrlc()?)))
+        .with_checker(config.check.to_factory())
+        .with_permuter(config.permute.to_permuter())
+        .with_sync(config.sync.to_factory())
+        .build()?
+        .run()?)
 }
 
 fn dump_report<W: io::Write>(w: W, r: model::obs::Report) -> anyhow::Result<()> {

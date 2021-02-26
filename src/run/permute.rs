@@ -25,7 +25,7 @@ impl<'a, R: rand::Rng + ?Sized, T: HasTid> Permuter<T> for R {
 }
 
 // A permuter that doesn't actually permute.
-pub struct Nop {}
+pub struct Nop;
 
 impl<T: HasTid> Permuter<T> for Nop {
     fn permute(&mut self, _: &mut [T]) {}

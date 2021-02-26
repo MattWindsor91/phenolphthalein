@@ -11,22 +11,57 @@ use crate::{api::abs, err, model};
 pub struct Builder<'a, T: abs::Entry<'a>> {
     // TODO(@MattWindsor91): use the actual builder pattern here.
     /// The halting rules that should be applied to tests run by this runner.
-    pub halt_rules: Vec<halt::Rule>,
+    halt_rules: Vec<halt::Rule>,
 
     /// The factory function to use to construct synchronisation.
-    pub sync: sync::Factory,
+    sync: sync::Factory,
 
     /// A cloneable entry into the test.
-    pub entry: T,
+    entry: T,
 
     /// The factory function to use to construct a checker.
-    pub check: abs::check::Factory<'a, T, T::Env>,
+    checker: abs::check::Factory<'a, T, T::Env>,
 
     /// The permuter to use for permuting threads.
-    pub permuter: Box<dyn Permuter<fsa::Ready<'a, T>>>,
+    permuter: Box<dyn Permuter<fsa::Ready<'a, T>>>,
 }
 
 impl<'a, T: abs::Entry<'a>> Builder<'a, T> {
+    /// Constructs a new builder with minimalistic defaults.
+    pub fn new(entry: T) -> Self {
+        Self {
+            entry,
+            halt_rules: vec![],
+            sync: sync::make_spinner,
+            checker: abs::check::unknown_factory,
+            permuter: Box::new(super::permute::Nop),
+        }
+    }
+
+    /// Adds the given halt rules to this builder.
+    pub fn add_halt_rules(mut self, rules: impl IntoIterator<Item = halt::Rule>) -> Self {
+        self.halt_rules.extend(rules);
+        self
+    }
+
+    /// Overrides this builder's checker factory.
+    pub fn with_checker(mut self, checker: abs::check::Factory<'a, T, T::Env>) -> Self {
+        self.checker = checker;
+        self
+    }
+
+    /// Overrides this builder's synchroniser factory.
+    pub fn with_sync(mut self, sync: sync::Factory) -> Self {
+        self.sync = sync;
+        self
+    }
+
+    /// Overrides this builder's permuter factory.
+    pub fn with_permuter(mut self, permuter: Box<dyn Permuter<fsa::Ready<'a, T>>>) -> Self {
+        self.permuter = permuter;
+        self
+    }
+
     pub fn build(self) -> err::Result<Runner<'a, T>> {
         let manifest = self.entry.make_manifest()?;
         let shared = self.make_shared_state(manifest)?;
@@ -50,7 +85,7 @@ impl<'a, T: abs::Entry<'a>> Builder<'a, T> {
         Ok(shared::State {
             halt_rules: self.halt_rules.clone(),
             observer,
-            checker: (self.check)(&self.entry),
+            checker: (self.checker)(&self.entry),
             env,
         })
     }
