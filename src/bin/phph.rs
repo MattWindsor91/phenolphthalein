@@ -103,7 +103,7 @@ fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
 
     match ux::clap::Action::DumpConfig.parse_clap(&matches)? {
         Action::DumpConfig => Ok(config.dump()?),
-        Action::DumpConfigPath => dump_config_path(&path),
+        Action::DumpConfigPath => Ok(dump_config_path(&path)),
         Action::RunTest(path) => run_test(config, &path),
     }
 }
@@ -118,9 +118,8 @@ fn load_config(path: &path::Path) -> anyhow::Result<config::Config> {
     }
 }
 
-fn dump_config_path(path: &path::Path) -> anyhow::Result<()> {
-    println!("{}", path.to_string_lossy());
-    Ok(())
+fn dump_config_path(path: &path::Path) {
+    println!("{}", path.to_string_lossy())
 }
 
 fn run_test(config: config::Config, input: &path::Path) -> anyhow::Result<()> {
