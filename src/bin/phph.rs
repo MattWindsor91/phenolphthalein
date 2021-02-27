@@ -1,7 +1,13 @@
 #[macro_use]
 extern crate clap;
 
-use std::{io, iter::once};
+use std::{
+    fs::File,
+    io::{self, Read},
+    iter::once,
+    path,
+    str::FromStr,
+};
 
 use phenolphthalein::{
     api::{self, abs::Test, c},
@@ -62,36 +68,87 @@ fn app<'a, 'b>() -> App<'a, 'b> {
                 .value_name("NUM"),
         )
         .arg(
+            Arg::with_name(CONFIG)
+                .help("Load config from this file")
+                .long("--config")
+                .short("-c"),
+        )
+        .arg(
             Arg::with_name(DUMP_CONFIG)
                 .help("Dump config instead of testing")
                 .long("--dump-config"),
         )
         .arg(
+            Arg::with_name(DUMP_CONFIG_PATH)
+                .help("Dump config path instead of testing")
+                .conflicts_with(DUMP_CONFIG)
+                .long("--dump-config-path"),
+        )
+        .arg(
             Arg::with_name(config::clap::arg::INPUT)
                 .help("The input file (.so, .dylib) to use")
-                .required_unless_one(&[DUMP_CONFIG])
+                .conflicts_with_all(&[DUMP_CONFIG, DUMP_CONFIG_PATH])
                 .index(1),
         )
 }
 
 const INPUT: &str = "INPUT";
 const DUMP_CONFIG: &str = "dump-config";
+const DUMP_CONFIG_PATH: &str = "dump-config-path";
+const CONFIG: &str = "config";
 
 fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
     use config::clap::Clappable;
 
-    let config = config::Config::default().parse_clap(&matches)?;
+    let path = config_file(&matches)?;
+    let config = load_config(&path)?.parse_clap(&matches)?;
     if matches.is_present(DUMP_CONFIG) {
         dump_config(config)
+    } else if matches.is_present(DUMP_CONFIG_PATH) {
+        println!("{}", path.to_string_lossy());
+        Ok(())
     } else {
         let input = matches.value_of(INPUT).unwrap();
         run_test(config, input)
     }
 }
 
+fn load_config(path: &path::Path) -> anyhow::Result<config::Config> {
+    if path.exists() {
+        let mut buf = String::new();
+        let _ = File::open(path)?.read_to_string(&mut buf)?;
+        Ok(config::Config::from_str(&buf)?)
+    } else {
+        Ok(config::Config::default())
+    }
+}
+
 fn dump_config(config: config::Config) -> anyhow::Result<()> {
     println!("{}", config.to_string()?);
     Ok(())
+}
+
+fn config_file(matches: &clap::ArgMatches) -> anyhow::Result<path::PathBuf> {
+    matches
+        .value_of(CONFIG)
+        .map(|x| Ok(path::PathBuf::from_str(x)?))
+        .unwrap_or_else(|| Ok(default_config_file()))
+}
+
+fn default_config_file() -> path::PathBuf {
+    let mut path = default_config_dir();
+    path.push("config.toml");
+    path
+}
+
+fn default_config_dir() -> path::PathBuf {
+    // TODO(@MattWindsor91): make this an error
+    if let Some(mut ucd) = dirs::config_dir() {
+        ucd.push("phph");
+        ucd
+    } else {
+        path::PathBuf::new()
+    }
 }
 
 fn run_test(config: config::Config, input: &str) -> anyhow::Result<()> {
