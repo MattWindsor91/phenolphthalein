@@ -1,3 +1,4 @@
+//! The top-level config structure.
 use std::str::FromStr;
 
 use super::{check, err, iter, permute, sync};
@@ -28,6 +29,12 @@ impl Config {
     /// Tries to dump a config to a string.
     pub fn to_string(&self) -> err::Result<String> {
         Ok(toml::to_string_pretty(self)?)
+    }
+
+    /// Dumps the configuration to stdout.
+    pub fn dump(&self) -> err::Result<()> {
+        println!("{}", self.to_string()?);
+        Ok(())
     }
 }
 

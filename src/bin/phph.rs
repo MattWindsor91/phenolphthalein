@@ -12,7 +12,10 @@ use std::{
 use phenolphthalein::{
     api::{self, abs::Test, c},
     config, model, run,
-    ux::report::{Dumper, HistogramDumper},
+    ux::{
+        self,
+        report::{Dumper, HistogramDumper},
+    },
 };
 
 use clap::{App, Arg};
@@ -30,7 +33,7 @@ fn app<'a, 'b>() -> App<'a, 'b> {
         .version(crate_version!())
         .about("Concurrency test runner")
         .arg(
-            Arg::with_name(config::clap::arg::CHECK)
+            Arg::with_name(ux::clap::arg::CHECK)
                 .help("Checking strategy to use")
                 .short("-c")
                 .long("--check")
@@ -38,7 +41,7 @@ fn app<'a, 'b>() -> App<'a, 'b> {
                 .possible_values(config::check::string::ALL),
         )
         .arg(
-            Arg::with_name(config::clap::arg::PERMUTE)
+            Arg::with_name(ux::clap::arg::PERMUTE)
                 .help("Permuting strategy to use")
                 .short("-p")
                 .long("--permute")
@@ -46,7 +49,7 @@ fn app<'a, 'b>() -> App<'a, 'b> {
                 .possible_values(config::permute::string::ALL),
         )
         .arg(
-            Arg::with_name(config::clap::arg::SYNC)
+            Arg::with_name(ux::clap::arg::SYNC)
                 .help("Synchronisation strategy to use")
                 .short("-s")
                 .long("--sync")
@@ -54,62 +57,54 @@ fn app<'a, 'b>() -> App<'a, 'b> {
                 .possible_values(config::sync::string::ALL),
         )
         .arg(
-            Arg::with_name(config::clap::arg::ITERATIONS)
+            Arg::with_name(ux::clap::arg::ITERATIONS)
                 .help("Iterations to perform in total")
                 .short("-i")
                 .long("--iterations")
                 .value_name("NUM"),
         )
         .arg(
-            Arg::with_name(config::clap::arg::PERIOD)
+            Arg::with_name(ux::clap::arg::PERIOD)
                 .help("rotate threads after each NUM iterations")
                 .short("-p")
                 .long("--period")
                 .value_name("NUM"),
         )
         .arg(
-            Arg::with_name(CONFIG)
+            Arg::with_name(ux::clap::arg::CONFIG)
                 .help("Load config from this file")
                 .long("--config")
                 .short("-c"),
         )
         .arg(
-            Arg::with_name(DUMP_CONFIG)
+            Arg::with_name(ux::clap::arg::DUMP_CONFIG)
                 .help("Dump config instead of testing")
                 .long("--dump-config"),
         )
         .arg(
-            Arg::with_name(DUMP_CONFIG_PATH)
+            Arg::with_name(ux::clap::arg::DUMP_CONFIG_PATH)
                 .help("Dump config path instead of testing")
-                .conflicts_with(DUMP_CONFIG)
+                .conflicts_with(ux::clap::arg::DUMP_CONFIG)
                 .long("--dump-config-path"),
         )
         .arg(
-            Arg::with_name(config::clap::arg::INPUT)
+            Arg::with_name(ux::clap::arg::INPUT)
                 .help("The input file (.so, .dylib) to use")
-                .conflicts_with_all(&[DUMP_CONFIG, DUMP_CONFIG_PATH])
+                .conflicts_with_all(&[ux::clap::arg::DUMP_CONFIG, ux::clap::arg::DUMP_CONFIG_PATH])
                 .index(1),
         )
 }
 
-const INPUT: &str = "INPUT";
-const DUMP_CONFIG: &str = "dump-config";
-const DUMP_CONFIG_PATH: &str = "dump-config-path";
-const CONFIG: &str = "config";
-
 fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
-    use config::clap::Clappable;
+    use ux::clap::{Action, Clappable};
 
-    let path = config_file(&matches)?;
+    let path = ux::clap::config_file(&matches)?;
     let config = load_config(&path)?.parse_clap(&matches)?;
-    if matches.is_present(DUMP_CONFIG) {
-        dump_config(config)
-    } else if matches.is_present(DUMP_CONFIG_PATH) {
-        println!("{}", path.to_string_lossy());
-        Ok(())
-    } else {
-        let input = matches.value_of(INPUT).unwrap();
-        run_test(config, input)
+
+    match ux::clap::Action::DumpConfig.parse_clap(&matches)? {
+        Action::DumpConfig => Ok(config.dump()?),
+        Action::DumpConfigPath => dump_config_path(&path),
+        Action::RunTest(path) => run_test(config, &path),
     }
 }
 
@@ -123,35 +118,12 @@ fn load_config(path: &path::Path) -> anyhow::Result<config::Config> {
     }
 }
 
-fn dump_config(config: config::Config) -> anyhow::Result<()> {
-    println!("{}", config.to_string()?);
+fn dump_config_path(path: &path::Path) -> anyhow::Result<()> {
+    println!("{}", path.to_string_lossy());
     Ok(())
 }
 
-fn config_file(matches: &clap::ArgMatches) -> anyhow::Result<path::PathBuf> {
-    matches
-        .value_of(CONFIG)
-        .map(|x| Ok(path::PathBuf::from_str(x)?))
-        .unwrap_or_else(|| Ok(default_config_file()))
-}
-
-fn default_config_file() -> path::PathBuf {
-    let mut path = default_config_dir();
-    path.push("config.toml");
-    path
-}
-
-fn default_config_dir() -> path::PathBuf {
-    // TODO(@MattWindsor91): make this an error
-    if let Some(mut ucd) = dirs::config_dir() {
-        ucd.push("phph");
-        ucd
-    } else {
-        path::PathBuf::new()
-    }
-}
-
-fn run_test(config: config::Config, input: &str) -> anyhow::Result<()> {
+fn run_test(config: config::Config, input: &path::Path) -> anyhow::Result<()> {
     let test = c::Test::load(input)?;
     let report = run_entry(config, test.spawn())?;
     // TODO(@MattWindsor91): don't hardcode this

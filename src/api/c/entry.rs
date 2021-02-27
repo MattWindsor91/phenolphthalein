@@ -1,7 +1,9 @@
+//! C implementation of test entries and tests.
 use dlopen::symbor::{Container, Ref, SymBorApi, Symbol};
 
 use super::{env, manifest};
 use crate::{api::abs, err, model};
+use std::path;
 
 /// Entry point for C-ABI tests coming from dynamically loaded libraries.
 #[derive(SymBorApi, Clone)]
@@ -52,7 +54,7 @@ pub struct Test {
 
 impl Test {
     /// Loads a test from a dynamic library at `file`.
-    pub fn load(file: &str) -> err::Result<Self> {
+    pub fn load(file: &path::Path) -> err::Result<Self> {
         let c = unsafe { Container::load(file) }?;
         // TODO(@MattWindsor91): perform basic safety checks.
         Ok(Test { c })

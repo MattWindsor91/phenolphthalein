@@ -2,7 +2,7 @@
 use thiserror::Error;
 
 /// A configuration error.
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Error)]
 pub enum Error {
     /// The user supplied the given string, which was a bad check strategy.
     #[error("unsupported checking strategy: {0}")]
@@ -27,12 +27,16 @@ pub enum Error {
     BadPeriod(std::num::ParseIntError),
 
     /// We couldn't deserialise the config from TOML.
-    #[error("couldn't parse config: {0}")]
+    #[error("couldn't parse config")]
     Deserialize(#[from] toml::de::Error),
 
     /// We couldn't serialise the config to TOML.
-    #[error("couldn't dump config: {0}")]
+    #[error("couldn't dump config")]
     Serialize(#[from] toml::ser::Error),
+
+    /// We couldn't perform some IO operation with the config..
+    #[error("config I/O error")]
+    Io(#[from] std::io::Error),
 }
 
 /// Results over [Error].

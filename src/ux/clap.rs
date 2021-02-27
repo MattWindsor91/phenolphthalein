@@ -1,10 +1,18 @@
 //! `clap` integration for config.
 
-use std::{num::NonZeroUsize, str::FromStr};
+use std::{num::NonZeroUsize, path, str::FromStr};
 
-use super::{check, err, iter, permute, sync, top};
+use super::err;
+use crate::config::{self, check, io, iter, permute, sync, Config};
 
+/// Clap names for various arguments.
 pub mod arg {
+    /// Name of the dump-config argument.
+    pub const DUMP_CONFIG: &str = "dump-config";
+    /// Name of the dump-config-path argument.
+    pub const DUMP_CONFIG_PATH: &str = "dump-config-path";
+    /// Name of the config argument.
+    pub const CONFIG: &str = "config";
     /// Name of the input file argument.
     pub const INPUT: &str = "INPUT";
     /// Name of the `check` argument.
@@ -20,6 +28,15 @@ pub mod arg {
     pub const PERIOD: &str = "period";
 }
 
+/// Gets the config file mentioned on the command line, or the default file if
+/// no such file was named.
+pub fn config_file(matches: &clap::ArgMatches) -> anyhow::Result<path::PathBuf> {
+    matches
+        .value_of(arg::CONFIG)
+        .map(|x| Ok(x.parse()?))
+        .unwrap_or_else(|| Ok(io::default_file()))
+}
+
 /// Trait for things that can be updated from command line arguments taken from
 /// `clap`.
 pub trait Clappable: Sized {
@@ -29,7 +46,7 @@ pub trait Clappable: Sized {
 }
 
 /// We can fill a top-level config using clap.
-impl Clappable for top::Config {
+impl Clappable for Config {
     fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self> {
         Ok(Self {
             check: self.check.parse_clap(matches)?,
@@ -42,7 +59,7 @@ impl Clappable for top::Config {
 
 impl Clappable for check::Strategy {
     fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self> {
-        parse_or(matches.value_of(arg::CHECK), self)
+        Ok(parse_or(matches.value_of(arg::CHECK), self)?)
     }
 }
 
@@ -52,9 +69,9 @@ impl Clappable for iter::Strategy {
         let iterations = parse_or_else(matches.value_of(arg::ITERATIONS), || {
             as_usize(self.iterations())
         })
-        .map_err(err::Error::BadIterationCount)?;
+        .map_err(config::Error::BadIterationCount)?;
         let period = parse_or_else(matches.value_of(arg::PERIOD), || as_usize(self.period()))
-            .map_err(err::Error::BadPeriod)?;
+            .map_err(config::Error::BadPeriod)?;
 
         Ok(iter::Strategy::from_ints(iterations, period))
     }
@@ -63,14 +80,14 @@ impl Clappable for iter::Strategy {
 /// We can fill a thread permutation strategy using clap.
 impl Clappable for permute::Strategy {
     fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self> {
-        parse_or(matches.value_of(arg::PERMUTE), self)
+        Ok(parse_or(matches.value_of(arg::PERMUTE), self)?)
     }
 }
 
 /// We can fill a sync strategy using clap.
 impl Clappable for sync::Strategy {
     fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self> {
-        parse_or(matches.value_of(arg::SYNC), self)
+        Ok(parse_or(matches.value_of(arg::SYNC), self)?)
     }
 }
 
@@ -87,4 +104,27 @@ fn parse_or_else<T: FromStr>(
     default: impl FnOnce() -> T,
 ) -> std::result::Result<T, T::Err> {
     int_str.map_or_else(|| Ok(default()), |s| s.parse())
+}
+
+/// Actions that can be specified on the command line.
+pub enum Action {
+    /// Asks to run the test with a given path.
+    RunTest(path::PathBuf),
+    /// Asks to dump the config.
+    DumpConfig,
+    /// Asks to dump the path to the config.
+    DumpConfigPath,
+}
+
+impl Clappable for Action {
+    fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self> {
+        Ok(if matches.is_present(arg::DUMP_CONFIG) {
+            Self::DumpConfig
+        } else if matches.is_present(arg::DUMP_CONFIG_PATH) {
+            Self::DumpConfigPath
+        } else {
+            let input = matches.value_of(arg::INPUT).ok_or(err::Error::NoInput)?;
+            Self::RunTest(input.parse()?)
+        })
+    }
 }
