@@ -110,7 +110,7 @@ impl<'de> Visitor<'de> for StrategyVisitor {
     }
 
     fn visit_str<E: serde::de::Error>(self, v: &str) -> std::result::Result<Self::Value, E> {
-        Ok(v.parse().map_err(|x| E::custom(x))?)
+        Ok(v.parse().map_err(E::custom)?)
     }
 }
 

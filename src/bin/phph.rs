@@ -74,6 +74,7 @@ fn app<'a, 'b>() -> App<'a, 'b> {
         )
 }
 
+const INPUT: &str = "INPUT";
 const DUMP_CONFIG: &str = "dump-config";
 
 fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
@@ -83,17 +84,18 @@ fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
     if matches.is_present(DUMP_CONFIG) {
         dump_config(config)
     } else {
-        run_test(config)
+        let input = matches.value_of(INPUT).unwrap();
+        run_test(config, input)
     }
 }
 
 fn dump_config(config: config::Config) -> anyhow::Result<()> {
-    let s = config.to_string()?;
-    Ok(println!("{}", s))
+    println!("{}", config.to_string()?);
+    Ok(())
 }
 
-fn run_test(config: config::Config) -> anyhow::Result<()> {
-    let test = c::Test::load(config.input)?;
+fn run_test(config: config::Config, input: &str) -> anyhow::Result<()> {
+    let test = c::Test::load(input)?;
     let report = run_entry(config, test.spawn())?;
     // TODO(@MattWindsor91): don't hardcode this
     dump_report(std::io::stdout(), report)

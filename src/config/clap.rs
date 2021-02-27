@@ -22,17 +22,16 @@ pub mod arg {
 
 /// Trait for things that can be updated from command line arguments taken from
 /// `clap`.
-pub trait Clappable<'a>: Sized {
+pub trait Clappable: Sized {
     /// Merges configuration from a clap match dictionary into this, potentially
     /// replacing it entirely.
-    fn parse_clap(self, matches: &'a clap::ArgMatches) -> err::Result<Self>;
+    fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self>;
 }
 
 /// We can fill a top-level config using clap.
-impl<'a> Clappable<'a> for top::Config<'a> {
-    fn parse_clap(self, matches: &'a clap::ArgMatches) -> err::Result<Self> {
+impl Clappable for top::Config {
+    fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self> {
         Ok(Self {
-            input: matches.value_of(arg::INPUT).unwrap_or(self.input),
             check: self.check.parse_clap(matches)?,
             iter: self.iter.parse_clap(matches)?,
             sync: self.sync.parse_clap(matches)?,
@@ -41,15 +40,15 @@ impl<'a> Clappable<'a> for top::Config<'a> {
     }
 }
 
-impl<'a> Clappable<'a> for check::Strategy {
-    fn parse_clap(self, matches: &'a clap::ArgMatches) -> err::Result<Self> {
+impl Clappable for check::Strategy {
+    fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self> {
         parse_or(matches.value_of(arg::CHECK), self)
     }
 }
 
 /// We can fill an iteration strategy using clap.
-impl<'a> Clappable<'a> for iter::Strategy {
-    fn parse_clap(self, matches: &'a clap::ArgMatches) -> err::Result<Self> {
+impl Clappable for iter::Strategy {
+    fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self> {
         let iterations = parse_or_else(matches.value_of(arg::ITERATIONS), || {
             as_usize(self.iterations())
         })
@@ -62,15 +61,15 @@ impl<'a> Clappable<'a> for iter::Strategy {
 }
 
 /// We can fill a thread permutation strategy using clap.
-impl<'a> Clappable<'a> for permute::Strategy {
-    fn parse_clap(self, matches: &'a clap::ArgMatches) -> err::Result<Self> {
+impl Clappable for permute::Strategy {
+    fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self> {
         parse_or(matches.value_of(arg::PERMUTE), self)
     }
 }
 
 /// We can fill a sync strategy using clap.
-impl<'a> Clappable<'a> for sync::Strategy {
-    fn parse_clap(self, matches: &'a clap::ArgMatches) -> err::Result<Self> {
+impl Clappable for sync::Strategy {
+    fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self> {
         parse_or(matches.value_of(arg::SYNC), self)
     }
 }

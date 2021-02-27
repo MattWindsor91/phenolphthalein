@@ -1,12 +1,12 @@
+use std::str::FromStr;
+
 use super::{check, err, iter, permute, sync};
 use crate::run::halt;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize)]
 /// The top-level config structure.
-pub struct Config<'a> {
-    /// The input filename.
-    pub input: &'a str,
+pub struct Config {
     /// The strategy for thread permutation that the runner should take.
     pub permute: permute::Strategy,
     /// The synchronisation strategy.
@@ -17,7 +17,7 @@ pub struct Config<'a> {
     pub iter: iter::Strategy,
 }
 
-impl<'a> Config<'a> {
+impl Config {
     /// Gets the halting rules requested in this argument set.
     pub fn halt_rules(&self) -> impl Iterator<Item = halt::Rule> {
         let i_rules = self.iter.halt_rules();
@@ -29,9 +29,13 @@ impl<'a> Config<'a> {
     pub fn to_string(&self) -> err::Result<String> {
         Ok(toml::to_string_pretty(self)?)
     }
+}
+
+impl FromStr for Config {
+    type Err = err::Error;
 
     /// Tries to load a config from a string.
-    pub fn from_str(s: &'a str) -> err::Result<Self> {
+    fn from_str(s: &str) -> err::Result<Self> {
         Ok(toml::from_str(s)?)
     }
 }
