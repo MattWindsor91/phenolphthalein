@@ -1,19 +1,37 @@
 # phenolphthalein
 
-_Phenolphthalein_ is an experiment to try make a concurrency test runner
-that:
+_Phenolphthalein_ is an experimental concurrency test runner that:
 
-- can run fixed-input, fixed-threading C11 concurrency tests;
+- can run fixed-input, fixed-threading C11 concurrency tests
 - is reasonably agnostic as to how those tests are implemented, requiring
-  some common stub code but nothing more;
+  some common stub code but nothing more
 - is based on the model of a fairly heavyweight standalone test runner
-  interfacing with separately compiled test code.
+  interfacing with separately compiled test code, rather than integrated test
+  harnesses
 
-(**NOTE:** this is very much the kind of experiment that might result in
-failure, so don't be getting any hopes up.)
+While still quite new, inefficient, and rough against the edges, it has
+the following features:
+
+- handles `SIGTERM` by returning partial results
+- run tests indefinitely (or until the test fails or passes)
+- output in machine-readable JSON as well as traditional histograms
 
 Phenolphthalein is written in Rust (with some C interfacing code) and
 licenced under the MIT licence.
+
+## Why would I want to use this?
+
+You probably don't yet - it's early beta-grade software.  But the intention is
+that it'll be useful when
+you want something like [Litmus](https://github.com/herdtools/litmus7), but:
+
+- you need to support things that aren't, or don't fit well in, Litmus tests
+- you'd prefer most of the test running infrastructure concentrated in one
+  program, rather than being duplicated into test binaries
+- you can somehow compile/run Rust binaries but not OCaml ones
+- you need some of the above exotic features phenolphthalein has
+- you don't need native support for assembly, cross-compilation, Litmus test
+  ingestion, etc.
 
 ## How do I use this?
 
@@ -29,6 +47,12 @@ $ cargo run --release [OPTIONS] test.dylib
 
 `phph` accepts several arguments:
 
+#### Test parameters
+
+These can also be set globally using a TOML config file: pass
+`--dump-config-path` instead of a test file to see where `phph` is looking for
+one, and `--dump-config` to get the current config in the right format.
+
 - `--iterations=N`: run `N` many iterations in total (set to `0` to disable
   iteration cap)
 - `--period=N`: join and re-create threads every `N` iterations
@@ -42,6 +66,11 @@ $ cargo run --release [OPTIONS] test.dylib
 - `--sync=TYPE`: synchronise threads with a spinlock (`spinner`, default) or
   a full Rust barrier (`barrier`); `spinner` is faster and tends to show more
   weak behaviour, but `barrier` is perhaps 'safer'
+
+#### Output control
+
+- `--output-type=TYPE`: control the output format, with possibilities being a
+  litmus7-style `histogram`, or a semi-machine-readable `json` serialisation
 
 ## How can I help?
 
