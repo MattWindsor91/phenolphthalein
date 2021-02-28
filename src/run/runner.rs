@@ -97,7 +97,7 @@ impl<'a, T: abs::Entry<'a>> Builder<'a, T> {
 
 pub struct Runner<'a, T: abs::Entry<'a>> {
     automata: Option<fsa::Set<'a, T>>,
-    report: Option<model::obs::Report>,
+    report: Option<model::report::Report>,
     permuter: Box<dyn Permuter<fsa::Ready<'a, T>> + 'a>,
 }
 
@@ -119,7 +119,7 @@ impl<'a, 'scope> fsa::Threader<'a, 'scope> for &'scope crossbeam::thread::Scope<
 
 impl<'a, T: abs::Entry<'a>> Runner<'a, T> {
     /// Runs the Runner's test until it exits.
-    pub fn run(mut self) -> err::Result<model::obs::Report> {
+    pub fn run(mut self) -> err::Result<model::report::Report> {
         while let Some(am) = self.automata.take() {
             match self.run_rotation(am)? {
                 fsa::Outcome::Rotate(am) => {

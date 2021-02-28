@@ -12,15 +12,13 @@ use std::{fmt::Display, str::FromStr};
 /// Outcomes are non-exhaustive, in the unlikely case that we add more.
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Outcome {
     /// The observation passed its check.
-    #[serde(rename = "pass")]
     Pass,
     /// The observation failed its check.
-    #[serde(rename = "fail")]
     Fail,
     /// The observation has no determined outcome.
-    #[serde(rename = "unknown")]
     Unknown,
 }
 
@@ -81,6 +79,13 @@ impl FromStr for Outcome {
             string::UNKNOWN => Ok(Self::Unknown),
             _ => Err(lc),
         }
+    }
+}
+
+/// The default outcome is [Outcome::Unknown].
+impl Default for Outcome {
+    fn default() -> Self {
+        Self::Unknown
     }
 }
 

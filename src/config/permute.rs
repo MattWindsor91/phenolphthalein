@@ -19,13 +19,12 @@ pub mod string {
 
 /// Enumeration of thread permutation methods.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum Strategy {
     /// Randomly permute thread-automaton assignments on each rotation.
-    #[serde(rename = "random")]
     Random,
     /// Never permute.
-    #[serde(rename = "static")]
     Static,
 }
 

@@ -16,6 +16,7 @@ dlopen_derive = "0.1.4"
 libc = "0.2"
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 tabwriter = { version = "1.2.1", features = ["ansi_formatting"] }
 thiserror = "1.0"
 toml = "0.5"

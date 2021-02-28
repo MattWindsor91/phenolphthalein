@@ -1,4 +1,4 @@
-use crate::{api::abs, err, model};
+use crate::{api::abs, err, model::{self, state}};
 
 /* TODO(@MattWindsor91): morally, a State should only borrow the variable names,
    as they are held by the parent Observer's Manifest for the entire scope that
@@ -10,7 +10,7 @@ use crate::{api::abs, err, model};
 #[derive(Default)]
 pub struct Observer {
     /// The observations that this observer has made so far.
-    pub obs: model::obs::Set,
+    pub obs: std::collections::HashMap<state::State, state::Info>,
 
     /// The number of iterations this observer has seen so far.
     iterations: usize,
@@ -39,11 +39,11 @@ impl Observer {
         &mut self,
         env: &mut Manifested<E>,
         checker: &'a dyn abs::Checker<E>,
-    ) -> model::obs::Obs {
+    ) -> model::state::Info {
         let state = current_state(env);
         let info = self.obs.get(&state).map_or_else(
             || self.observe_state_for_first_time(&env.env, checker),
-            model::obs::Obs::inc,
+            model::state::Info::inc,
         );
         self.obs.insert(state, info);
         info
@@ -53,35 +53,31 @@ impl Observer {
         &self,
         env: &E,
         checker: &'a dyn abs::Checker<E>,
-    ) -> model::obs::Obs {
+    ) -> model::state::Info {
         let outcome = checker.check(env);
-        model::obs::Obs {
-            occurs: 1,
-            outcome,
-            iteration: self.iterations,
-        }
+        model::state::Info::new(outcome, self.iterations)
     }
 
     /// Consumes this Observer and returns a summary of its state.
-    pub fn into_report(self) -> model::obs::Report {
-        let outcome = self
-            .obs
-            .values()
-            .max_by_key(|v| v.outcome)
-            .map(|v| v.outcome);
-        model::obs::Report {
-            outcome,
-            obs: self.obs,
+    pub fn into_report(self) -> model::report::Report {
+        let mut report = model::report::Report{
+            outcome: None,
+            states: Vec::with_capacity(self.obs.len())
+        };
+
+        for (state, info) in self.obs {
+            report.insert(model::report::State{state, info});
         }
+
+        report
     }
 }
 
 /// Gets the current state of the environment.
 /// Note that this is not thread-safe until all test threads are synchronised.
-fn current_state<T: abs::Env>(env: &Manifested<T>) -> model::obs::State {
-    let mut s = model::obs::State::new();
-    // TODO(@MattWindsor91): have one great big iterator for values and collect it.
-    s.extend(env.i32_values());
+fn current_state<T: abs::Env>(env: &Manifested<T>) -> model::state::State {
+    let mut s = model::state::State::new();
+    s.extend(env.values());
     s
 }
 
@@ -93,7 +89,7 @@ pub struct Summary {
     pub iterations: usize,
 
     /// The information from the current observation.
-    pub info: model::obs::Obs,
+    pub info: model::state::Info,
 }
 
 /// An environment combined with a manifest.
@@ -119,12 +115,18 @@ impl<E: abs::Env> Manifested<E> {
         }
     }
 
+    // Iterates over all of the variables in the environment.
+    pub fn values(&self) -> impl Iterator<Item = (String, model::state::Value)> + '_ {
+        // Space for rent.
+        self.i32_values()
+    }
+
     // Iterates over all of the 32-bit integer variables in the environment.
-    pub fn i32_values(&self) -> impl Iterator<Item = (String, i32)> + '_ {
+    fn i32_values(&self) -> impl Iterator<Item = (String, model::state::Value)> + '_ {
         self.manifest
             .i32s
             .iter()
-            .map(move |(n, r)| (n.to_string(), self.env.get_i32(r.slot)))
+            .map(move |(n, r)| (n.to_string(), model::state::Value::I32(self.env.get_i32(r.slot))))
     }
 
     /// Constructs a manifested environment for a given manifest.

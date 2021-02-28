@@ -17,12 +17,11 @@ pub mod string {
 /// Enumeration of synchronisation strategy exported by the phenolphthalein
 /// toplevel.
 #[derive(Copy, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Strategy {
     /// Represents the spinner synchronisation strategy.
-    #[serde(rename = "spinner")]
     Spinner,
     /// Represents the barrier synchronisation strategy.
-    #[serde(rename = "barrier")]
     Barrier,
 }
 

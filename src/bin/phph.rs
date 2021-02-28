@@ -1,21 +1,12 @@
 #[macro_use]
 extern crate clap;
 
-use std::{
-    fs::File,
-    io::{self, Read},
-    iter::once,
-    path,
-    str::FromStr,
-};
+use std::{fs::File, io::Read, iter::once, path, str::FromStr};
 
 use phenolphthalein::{
     api::{self, abs::Test, c},
     config, model, run,
-    ux::{
-        self,
-        report::{Dumper, HistogramDumper},
-    },
+    ux::{self},
 };
 
 use clap::{App, Arg};
@@ -88,6 +79,14 @@ fn app<'a, 'b>() -> App<'a, 'b> {
                 .long("--dump-config-path"),
         )
         .arg(
+            Arg::with_name(ux::clap::arg::OUTPUT_TYPE)
+                .help("Type of output to return")
+                .long("--output-type")
+                .short("-O")
+                .value_name("TYPE")
+                .possible_values(ux::out::choice::string::ALL),
+        )
+        .arg(
             Arg::with_name(ux::clap::arg::INPUT)
                 .help("The input file (.so, .dylib) to use")
                 .conflicts_with_all(&[ux::clap::arg::DUMP_CONFIG, ux::clap::arg::DUMP_CONFIG_PATH])
@@ -98,13 +97,16 @@ fn app<'a, 'b>() -> App<'a, 'b> {
 fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
     use ux::clap::{Action, Clappable};
 
-    let path = ux::clap::config_file(&matches)?;
-    let config = load_config(&path)?.parse_clap(&matches)?;
+    let cpath = ux::clap::config_file(&matches)?;
+    let config = load_config(&cpath)?.parse_clap(&matches)?;
 
     match ux::clap::Action::DumpConfig.parse_clap(&matches)? {
         Action::DumpConfig => Ok(config.dump()?),
-        Action::DumpConfigPath => Ok(dump_config_path(&path)),
-        Action::RunTest(path) => run_test(config, &path),
+        Action::DumpConfigPath => {
+            dump_config_path(&cpath);
+            Ok(())
+        }
+        Action::RunTest(path, outputter) => run_test(config, &path, outputter),
     }
 }
 
@@ -122,17 +124,20 @@ fn dump_config_path(path: &path::Path) {
     println!("{}", path.to_string_lossy())
 }
 
-fn run_test(config: config::Config, input: &path::Path) -> anyhow::Result<()> {
+fn run_test(
+    config: config::Config,
+    input: &path::Path,
+    output: ux::out::Choice,
+) -> anyhow::Result<()> {
     let test = c::Test::load(input)?;
     let report = run_entry(config, test.spawn())?;
-    // TODO(@MattWindsor91): don't hardcode this
-    dump_report(std::io::stdout(), report)
+    Ok(output.to_outputter(std::io::stdout()).output(report)?)
 }
 
 fn run_entry<'a, E: api::abs::Entry<'a>>(
     config: config::Config,
     entry: E,
-) -> anyhow::Result<model::obs::Report> {
+) -> anyhow::Result<model::Report> {
     Ok(run::Builder::new(entry)
         .add_halt_rules(config.halt_rules().chain(once(setup_ctrlc()?)))
         .with_checker(config.check.to_factory())
@@ -140,11 +145,6 @@ fn run_entry<'a, E: api::abs::Entry<'a>>(
         .with_sync(config.sync.to_factory())
         .build()?
         .run()?)
-}
-
-fn dump_report<W: io::Write>(w: W, r: model::obs::Report) -> anyhow::Result<()> {
-    HistogramDumper {}.dump(w, r)?;
-    Ok(())
 }
 
 /// Creates a halt rule that exits the test if control-C is sent.

@@ -12,17 +12,14 @@ const DEFAULT_PERIOD: usize = 100_000;
 /// The strategy used to handle iteration-based rotations and exits.
 #[non_exhaustive]
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "action")]
+#[serde(tag = "action", rename_all = "kebab-case")]
 pub enum Strategy {
     /// No halting based on iterations.
-    #[serde(rename = "no-halt")]
     NoHalt,
     /// Exit after the given number of iterations.
-    #[serde(rename = "exit")]
     Exit { iterations: NonZeroUsize },
     /// Exit after the given number of iterations, and rotate after each
     /// multiple of the given period.
-    #[serde(rename = "exit-and-rotate")]
     ExitAndRotate {
         iterations: NonZeroUsize,
         period: NonZeroUsize,

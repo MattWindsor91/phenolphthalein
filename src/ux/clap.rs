@@ -2,19 +2,23 @@
 
 use std::{num::NonZeroUsize, path, str::FromStr};
 
-use super::err;
+use super::{err, out};
 use crate::config::{self, check, io, iter, permute, sync, Config};
 
 /// Clap names for various arguments.
 pub mod arg {
+    /// Name of the input file argument.
+    pub const INPUT: &str = "INPUT";
+
+    /// Name of the output type file argument.
+    pub const OUTPUT_TYPE: &str = "input-type";
+
     /// Name of the dump-config argument.
     pub const DUMP_CONFIG: &str = "dump-config";
     /// Name of the dump-config-path argument.
     pub const DUMP_CONFIG_PATH: &str = "dump-config-path";
     /// Name of the config argument.
     pub const CONFIG: &str = "config";
-    /// Name of the input file argument.
-    pub const INPUT: &str = "INPUT";
     /// Name of the `check` argument.
     pub const CHECK: &str = "check";
     /// Name of the `permute` argument.
@@ -91,6 +95,13 @@ impl Clappable for sync::Strategy {
     }
 }
 
+/// We can fill an output choice using clap.
+impl Clappable for out::Choice {
+    fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self> {
+        Ok(parse_or(matches.value_of(arg::OUTPUT_TYPE), self)?)
+    }
+}
+
 fn as_usize(x: Option<NonZeroUsize>) -> usize {
     x.map_or(0, NonZeroUsize::get)
 }
@@ -109,7 +120,7 @@ fn parse_or_else<T: FromStr>(
 /// Actions that can be specified on the command line.
 pub enum Action {
     /// Asks to run the test with a given path.
-    RunTest(path::PathBuf),
+    RunTest(path::PathBuf, out::Choice),
     /// Asks to dump the config.
     DumpConfig,
     /// Asks to dump the path to the config.
@@ -124,7 +135,7 @@ impl Clappable for Action {
             Self::DumpConfigPath
         } else {
             let input = matches.value_of(arg::INPUT).ok_or(err::Error::NoInput)?;
-            Self::RunTest(input.parse()?)
+            Self::RunTest(input.parse()?, out::Choice::default().parse_clap(matches)?)
         })
     }
 }
