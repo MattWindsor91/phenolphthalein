@@ -102,8 +102,22 @@ impl Clappable for out::Choice {
     }
 }
 
+/// We can fill an output config using clap.
+impl Clappable for out::Config {
+    fn parse_clap(mut self, matches: &clap::ArgMatches) -> err::Result<Self> {
+        self.choice = self.choice.parse_clap(matches)?;
+        // TODO(@MattWindsor91): outputs other than stdout
+        Ok(self)
+    }
+}
+
 fn as_usize(x: Option<NonZeroUsize>) -> usize {
     x.map_or(0, NonZeroUsize::get)
+}
+
+/// Parses a `T` from clap matches, or supplies the default.
+fn clap_or_default<T: Default + Clappable>(matches: &clap::ArgMatches) -> err::Result<T> {
+    T::default().parse_clap(matches)
 }
 
 fn parse_or<T: FromStr>(int_str: Option<&str>, default: T) -> std::result::Result<T, T::Err> {
@@ -120,7 +134,7 @@ fn parse_or_else<T: FromStr>(
 /// Actions that can be specified on the command line.
 pub enum Action {
     /// Asks to run the test with a given path.
-    RunTest(path::PathBuf, out::Choice),
+    RunTest(path::PathBuf, out::Config),
     /// Asks to dump the config.
     DumpConfig,
     /// Asks to dump the path to the config.
@@ -135,7 +149,7 @@ impl Clappable for Action {
             Self::DumpConfigPath
         } else {
             let input = matches.value_of(arg::INPUT).ok_or(err::Error::NoInput)?;
-            Self::RunTest(input.parse()?, out::Choice::default().parse_clap(matches)?)
+            Self::RunTest(input.parse()?, clap_or_default(matches)?)
         })
     }
 }

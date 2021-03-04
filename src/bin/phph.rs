@@ -5,8 +5,8 @@ use std::{fs::File, io::Read, iter::once, path, str::FromStr};
 
 use phenolphthalein::{
     api::{self, abs::Test, c},
-    config, model, run,
-    ux::{self},
+    config, run,
+    ux::{self, out::Outputtable},
 };
 
 use clap::{App, Arg};
@@ -84,7 +84,7 @@ fn app<'a, 'b>() -> App<'a, 'b> {
                 .long("--output-type")
                 .short("-O")
                 .value_name("TYPE")
-                .possible_values(ux::out::choice::string::ALL),
+                .possible_values(ux::out::config::string::ALL),
         )
         .arg(
             Arg::with_name(ux::clap::arg::INPUT)
@@ -127,24 +127,27 @@ fn dump_config_path(path: &path::Path) {
 fn run_test(
     config: config::Config,
     input: &path::Path,
-    output: ux::out::Choice,
+    output: ux::out::Config,
 ) -> anyhow::Result<()> {
     let test = c::Test::load(input)?;
-    let report = run_entry(config, test.spawn())?;
-    Ok(output.to_outputter(std::io::stdout()).output(report)?)
+    run_entry(config, test.spawn(), output)?;
+    Ok(())
 }
 
 fn run_entry<'a, E: api::abs::Entry<'a>>(
     config: config::Config,
     entry: E,
-) -> anyhow::Result<model::Report> {
-    Ok(run::Builder::new(entry)
+    output: ux::out::Config,
+) -> anyhow::Result<()> {
+    run::Builder::new(entry)
         .add_halt_rules(config.halt_rules().chain(once(setup_ctrlc()?)))
         .with_checker(config.check.to_factory())
         .with_permuter(config.permute.to_factory())
         .with_sync(config.sync.to_factory())
         .build()?
-        .run()?)
+        .run()?
+        .output(output)?;
+    Ok(())
 }
 
 /// Creates a halt rule that exits the test if control-C is sent.

@@ -5,10 +5,10 @@
 //! through it.
 
 pub mod abs;
-pub mod choice;
+pub mod config;
 pub mod err;
 pub mod histo;
 pub mod json;
 
 pub use abs::Outputter;
-pub use choice::Choice;
+pub use config::{Choice, Config, Outputtable};
