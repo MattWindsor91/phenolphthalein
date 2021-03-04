@@ -1,8 +1,8 @@
 //! The [Report] type.
 
-use std::vec::Vec;
-use serde::{Serialize, Deserialize};
 use super::{outcome, state};
+use serde::{Deserialize, Serialize};
+use std::vec::Vec;
 
 /// A final report of observations coming from a test run.
 #[derive(Serialize, Deserialize)]
@@ -17,7 +17,7 @@ pub struct Report {
     ///
     /// This is a vector to ease serialisation and deserialisation, rather than
     /// for any deep purpose.
-    pub states: Vec<State>
+    pub states: Vec<State>,
 }
 
 impl Report {

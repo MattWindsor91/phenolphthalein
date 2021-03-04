@@ -19,15 +19,19 @@ pub type State = BTreeMap<String, Value>;
 #[non_exhaustive]
 pub enum Value {
     /// A 32-bit signed integer.
-    I32(i32)
+    I32(i32),
 }
 
 /// We display values, by default, without any type annotation.
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self{
-            Self::I32(v) => v
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::I32(v) => v,
+            }
+        )
     }
 }
 
@@ -52,7 +56,7 @@ impl Info {
         Self {
             occurs: 1,
             outcome,
-            iteration
+            iteration,
         }
     }
 

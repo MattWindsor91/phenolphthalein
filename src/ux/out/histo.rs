@@ -1,9 +1,15 @@
 //! The histogram outputter.
 
 use super::{abs::Outputter, err};
-use crate::model::{self, report::{State, Report}};
+use crate::model::{
+    self,
+    report::{Report, State},
+};
 use colored::Colorize;
-use std::{collections::BTreeMap, io::{self, Write}};
+use std::{
+    collections::BTreeMap,
+    io::{self, Write},
+};
 
 /// An outputter that provides Litmus-style histograms.
 pub struct Histogram<W> {
@@ -33,7 +39,7 @@ impl<W: Write> Histogram<W> {
         Ok(())
     }
 
-    fn dump_state(&mut self, State{state, info}: State) -> io::Result<()> {
+    fn dump_state(&mut self, State { state, info }: State) -> io::Result<()> {
         Ok(writeln!(
             self.w,
             "{occ}\t{sigil}>\t{state}\t(iter {iter})",
@@ -56,11 +62,10 @@ impl<W: Write> Histogram<W> {
 /// Converts a state valuation to a stirng.
 fn stringify_valuation(valuation: BTreeMap<String, model::state::Value>) -> String {
     /* TODO(@MattWindsor91): this should really be a Display impl, but
-       valuations have no defined type off which to hang it. */
+    valuations have no defined type off which to hang it. */
     valuation
         .iter()
         .map(|(k, v)| format!("{}={}", k, v))
         .collect::<Vec<_>>()
         .join("\t")
 }
-

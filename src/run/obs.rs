@@ -1,4 +1,8 @@
-use crate::{api::abs, err, model::{self, state}};
+use crate::{
+    api::abs,
+    err,
+    model::{self, state},
+};
 
 /* TODO(@MattWindsor91): morally, a State should only borrow the variable names,
    as they are held by the parent Observer's Manifest for the entire scope that
@@ -60,13 +64,13 @@ impl Observer {
 
     /// Consumes this Observer and returns a summary of its state.
     pub fn into_report(self) -> model::report::Report {
-        let mut report = model::report::Report{
+        let mut report = model::report::Report {
             outcome: None,
-            states: Vec::with_capacity(self.obs.len())
+            states: Vec::with_capacity(self.obs.len()),
         };
 
         for (state, info) in self.obs {
-            report.insert(model::report::State{state, info});
+            report.insert(model::report::State { state, info });
         }
 
         report
@@ -123,10 +127,12 @@ impl<E: abs::Env> Manifested<E> {
 
     // Iterates over all of the 32-bit integer variables in the environment.
     fn i32_values(&self) -> impl Iterator<Item = (String, model::state::Value)> + '_ {
-        self.manifest
-            .i32s
-            .iter()
-            .map(move |(n, r)| (n.to_string(), model::state::Value::I32(self.env.get_i32(r.slot))))
+        self.manifest.i32s.iter().map(move |(n, r)| {
+            (
+                n.to_string(),
+                model::state::Value::I32(self.env.get_i32(r.slot)),
+            )
+        })
     }
 
     /// Constructs a manifested environment for a given manifest.
