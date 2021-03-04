@@ -39,11 +39,7 @@ impl<'a> abs::Entry<'a> for Entry<'a> {
 
     /// Gets a checker for this test.
     fn checker(&self) -> Box<dyn abs::Checker<Self::Env> + 'a> {
-        if let Some(sym) = self.check {
-            Box::new(Checker { sym })
-        } else {
-            Box::new(model::Outcome::Unknown)
-        }
+        abs::check::make_optional(|sym| Box::new(Checker { sym: *sym }), &self.check)
     }
 }
 

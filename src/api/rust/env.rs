@@ -1,3 +1,5 @@
+//! Native-Rust shared environment and related types.
+
 use crate::{api::abs, err, model::slot};
 use std::{
     cell::UnsafeCell,
@@ -31,7 +33,20 @@ impl abs::Env for Env {
 ///
 /// `A` should be the atomic equivalent of `T`.
 pub struct Slotset<A, T> {
+    /// The atomic component of this slot-set.
+    ///
+    /// Atomics can always be read from and written to on an aliased borrow,
+    /// so these are just `A`.
     pub atomic: Vec<A>,
+
+    /// The non-atomic component of this slot-set.
+    ///
+    /// Non-atomics can only be read from and written to based on Rust's usual
+    /// ownership rules.  We don't yet enforce these rules ourselves (partly
+    /// because thread-local environments aren't implemented and partly
+    /// because we sometimes need global non-atomic variables in tests), and
+    /// consequently the test writer must assert the safety of each use
+    /// themselves by unwrapping an [UnsafeCell].
     pub non_atomic: Vec<UnsafeCell<T>>,
 }
 

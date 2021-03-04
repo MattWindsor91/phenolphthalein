@@ -35,6 +35,17 @@ pub trait Entry<'a>: Clone + 'a {
     fn checker(&self) -> Box<dyn check::Checker<Self::Env> + 'a>;
 }
 
+pub fn option_checker<'a, E, T>(
+    maker: fn(T) -> Box<dyn check::Checker<E> + 'a>,
+    opt: Option<T>,
+) -> Box<dyn check::Checker<E> + 'a> {
+    if let Some(precursor) = opt {
+        maker(precursor)
+    } else {
+        Box::new(model::Outcome::Unknown)
+    }
+}
+
 /// Trait of medium-level handles to an observable test environment.
 ///
 /// This trait currently mainly exists to hide parts of the actual environment
