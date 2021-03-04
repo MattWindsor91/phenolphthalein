@@ -52,9 +52,9 @@ impl Default for Strategy {
 ///
 /// ```
 /// use phenolphthalein::{config::check::Strategy, model::Outcome};
-/// assert_eq!(str::parse::<Strategy>("disable"), Ok(Strategy::Disable));
-/// assert_eq!(str::parse::<Strategy>("Report"), Ok(Strategy::Report));
-/// assert_eq!(str::parse::<Strategy>("EXIT-ON-PASS"), Ok(Strategy::ExitOn(Outcome::Pass)));
+/// assert_eq!(Strategy::Disable, str::parse::<Strategy>("disable").unwrap());
+/// assert_eq!(Strategy::Report, str::parse::<Strategy>("Report").unwrap());
+/// assert_eq!(Strategy::ExitOn(Outcome::Pass), str::parse::<Strategy>("EXIT-ON-PASS").unwrap());
 /// ```
 impl std::str::FromStr for Strategy {
     type Err = err::Error;
