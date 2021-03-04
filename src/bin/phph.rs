@@ -5,7 +5,7 @@ use std::{fs::File, io::Read, iter::once, path, str::FromStr};
 
 use phenolphthalein::{
     api::{self, abs::Test, c},
-    config, run,
+    config, model, run,
     ux::{self, out::Outputtable},
 };
 
@@ -101,13 +101,11 @@ fn run(matches: clap::ArgMatches) -> anyhow::Result<()> {
     let config = load_config(&cpath)?.parse_clap(&matches)?;
 
     match ux::clap::Action::DumpConfig.parse_clap(&matches)? {
-        Action::DumpConfig => Ok(config.dump()?),
-        Action::DumpConfigPath => {
-            dump_config_path(&cpath);
-            Ok(())
-        }
-        Action::RunTest(path, outputter) => run_test(config, &path, outputter),
-    }
+        Action::DumpConfig => config.dump()?,
+        Action::DumpConfigPath => dump_config_path(&cpath),
+        Action::RunTest(path, outputter) => run_test(config, &path)?.output(outputter)?,
+    };
+    Ok(())
 }
 
 fn load_config(path: &path::Path) -> anyhow::Result<config::Config> {
@@ -124,30 +122,22 @@ fn dump_config_path(path: &path::Path) {
     println!("{}", path.to_string_lossy())
 }
 
-fn run_test(
-    config: config::Config,
-    input: &path::Path,
-    output: ux::out::Config,
-) -> anyhow::Result<()> {
+fn run_test(config: config::Config, input: &path::Path) -> anyhow::Result<model::Report> {
     let test = c::Test::load(input)?;
-    run_entry(config, test.spawn(), output)?;
-    Ok(())
+    Ok(run_entry(config, test.spawn())?)
 }
 
 fn run_entry<'a, E: api::abs::Entry<'a>>(
     config: config::Config,
     entry: E,
-    output: ux::out::Config,
-) -> anyhow::Result<()> {
-    run::Builder::new(entry)
+) -> anyhow::Result<model::Report> {
+    Ok(run::Builder::new(entry)
         .add_halt_rules(config.halt_rules().chain(once(setup_ctrlc()?)))
         .with_checker(config.check.to_factory())
         .with_permuter(config.permute.to_factory())
         .with_sync(config.sync.to_factory())
         .build()?
-        .run()?
-        .output(output)?;
-    Ok(())
+        .run()?)
 }
 
 /// Creates a halt rule that exits the test if control-C is sent.
