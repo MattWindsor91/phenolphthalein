@@ -145,7 +145,7 @@ impl<'a, T: abs::Entry<'a>> Runner<'a, T> {
 fn run_thread<'a, T: abs::Entry<'a>>(mut t: fsa::Runnable<'a, T>) -> fsa::Done {
     loop {
         match t.run() {
-            fsa::RunOutcome::Done(d) => return d,
+            fsa::RunOutcome::Done(d) => break d,
             fsa::RunOutcome::Wait(w) => t = w.wait(),
             fsa::RunOutcome::Observe(o) => t = observe(o),
         }

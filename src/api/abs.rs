@@ -6,6 +6,9 @@ use crate::{err, model};
 
 pub mod check;
 
+#[cfg(test)]
+pub mod test_helpers;
+
 pub use check::Checker;
 
 /// Trait of top-level tests.
@@ -35,6 +38,8 @@ pub trait Entry<'a>: Clone + 'a {
     fn checker(&self) -> Box<dyn check::Checker<Self::Env> + 'a>;
 }
 
+/// If `opt` is `Some x`, calls `maker` on `x` to make a checker;
+/// otherwise, supplies a checker that always returns [model::Outcome::Unknown].
 pub fn option_checker<'a, E, T>(
     maker: fn(T) -> Box<dyn check::Checker<E> + 'a>,
     opt: Option<T>,
@@ -61,30 +66,4 @@ pub trait Env: Sized {
 
     /// Sets the 32-bit integer in the given slot to value v.
     fn set_i32(&mut self, slot: model::slot::Slot, v: i32);
-}
-
-#[cfg(test)]
-pub mod test_helpers {
-    use crate::{
-        err,
-        model::slot::{Reservation, ReservationSet, Slot},
-    };
-    use std::iter::once;
-
-    pub fn test_i32_get_set<E: super::Env>(is_atomic: bool) -> err::Result<()> {
-        let slot = Slot {
-            index: 0,
-            is_atomic,
-        };
-        let reservation = ReservationSet {
-            i32s: Reservation::of_slots(once(slot).into_iter()),
-        };
-        let mut env = E::of_reservations(reservation)?;
-
-        assert_eq!(0, env.get_i32(slot));
-        env.set_i32(slot, 42);
-        assert_eq!(42, env.get_i32(slot));
-
-        Ok(())
-    }
 }
