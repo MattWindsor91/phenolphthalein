@@ -331,7 +331,7 @@ impl<'a, T: Entry<'a>> Set<'a, T> {
     ) -> err::Result<Self> {
         let nthreads = tester_state.env.manifest.n_threads;
         let sync = sync(nthreads)?;
-        let last = Inner::new(nthreads - 1, tester_state, entry, sync);
+        let last = Inner::new(nthreads.get() - 1, tester_state, entry, sync);
         Ok(Set {
             vec: last.replicate(),
         })

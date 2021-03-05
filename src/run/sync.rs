@@ -1,11 +1,11 @@
 //! Synchronisation primitives for the test FSA.
 
 use crate::err;
-use std::convert::TryFrom;
 use std::sync::{
     atomic::{AtomicIsize, Ordering},
     Arc, Barrier,
 };
+use std::{convert::TryFrom, num::NonZeroUsize};
 
 /// Trait of things that can serve as thread synchronisers in the FSA.
 ///
@@ -59,6 +59,22 @@ unsafe impl Synchroniser for Barrier {
     }
 }
 
+/// Spin barriers are synchronisers; each phase corresponds to a barrier wait,
+/// and observers are nominated through the barrier's own leader function.
+unsafe impl Synchroniser for spin::Barrier {
+    fn run(&self) -> bool {
+        self.wait().is_leader()
+    }
+
+    fn obs(&self) {
+        self.wait();
+    }
+
+    fn wait(&self) {
+        self.wait();
+    }
+}
+
 /// A synchroniser based on a simple atomic counter and busy-waiting.
 ///
 /// When the spinner is positive, we're waiting for runners to finish; when it's
@@ -74,14 +90,13 @@ impl Spinner {
     /// A `Spinner` can only hold enough threads that fit inside an `isize`,
     /// for implementation reasons; the constructor will return an error if this
     /// is not the case.
-    pub fn new(nthreads: usize) -> err::Result<Self> {
-        let initial: isize =
-            isize::try_from(nthreads).map_err(err::Error::TooManyThreadsForSpinner)?;
-        assert_ne!(initial, 0, "no threads?");
+    pub fn new(nthreads: NonZeroUsize) -> err::Result<Self> {
+        let nthreads =
+            isize::try_from(nthreads.get()).map_err(err::Error::TooManyThreadsForSpinner)?;
 
         Ok(Spinner {
-            nthreads: initial,
-            inner: AtomicIsize::new(initial),
+            nthreads,
+            inner: AtomicIsize::new(nthreads),
         })
     }
 }
@@ -129,23 +144,19 @@ unsafe impl Synchroniser for Spinner {
 }
 
 /// Type alias of functions that return fully wrapped synchronisers.
-pub type Factory = fn(usize) -> err::Result<Arc<dyn Synchroniser>>;
+pub type Factory = fn(NonZeroUsize) -> err::Result<Arc<dyn Synchroniser>>;
 
 /// Wrapper function for making synchronisers out of barriers.
-pub fn make_barrier(nthreads: usize) -> err::Result<Arc<dyn Synchroniser>> {
-    if nthreads == 0 {
-        Err(err::Error::NotEnoughThreads)
-    } else {
-        Ok(Arc::new(Barrier::new(nthreads)))
-    }
+pub fn make_barrier(nthreads: NonZeroUsize) -> err::Result<Arc<dyn Synchroniser>> {
+    Ok(Arc::new(Barrier::new(nthreads.get())))
+}
+
+/// Wrapper function for making synchronisers out of spin-barriers.
+pub fn make_spin_barrier(nthreads: NonZeroUsize) -> err::Result<Arc<dyn Synchroniser>> {
+    Ok(Arc::new(spin::Barrier::new(nthreads.get())))
 }
 
 /// Wrapper function for making synchronisers out of spinners.
-pub fn make_spinner(nthreads: usize) -> err::Result<Arc<dyn Synchroniser>> {
-    if nthreads == 0 {
-        Err(err::Error::NotEnoughThreads)
-    } else {
-        let spin = Spinner::new(nthreads)?;
-        Ok(Arc::new(spin))
-    }
+pub fn make_spinner(nthreads: NonZeroUsize) -> err::Result<Arc<dyn Synchroniser>> {
+    Ok(Arc::new(Spinner::new(nthreads)?))
 }

@@ -1,12 +1,13 @@
 //! Test manifests.
 use super::slot::{Reservation, ReservationSet, Slot};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, num::NonZeroUsize};
 
 /// A test manifest, describing properties of a test.
 #[derive(Clone)]
 pub struct Manifest {
     /// The number of threads available in the test.
-    pub n_threads: usize,
+    /// There must be at least one thread.
+    pub n_threads: NonZeroUsize,
     /// Ordered map of int variables declared in the test.
     pub i32s: VarMap<i32>,
 }

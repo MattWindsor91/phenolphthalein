@@ -4,23 +4,28 @@ use super::err;
 use crate::run::sync;
 use serde::{Deserialize, Serialize};
 
-/// String representations of each strategy.
+/// String representations of each strategy, used in the clap interface.
 pub mod string {
     /// Name of the `Spinner` synchronisation strategy.
     pub const SPINNER: &str = "spinner";
+    /// Name of the `SpinBarrier` synchronisation strategy.
+    pub const SPIN_BARRIER: &str = "spin-barrier";
     /// Name of the `Barrier` synchronisation strategy.
     pub const BARRIER: &str = "barrier";
     /// Names of all synchronisation strategies.
-    pub const ALL: &[&str] = &[SPINNER, BARRIER];
+    pub const ALL: &[&str] = &[SPINNER, SPIN_BARRIER, BARRIER];
 }
 
 /// Enumeration of synchronisation strategy exported by the phenolphthalein
 /// toplevel.
 #[derive(Copy, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum Strategy {
     /// Represents the spinner synchronisation strategy.
     Spinner,
+    /// Represents the spin-barrier synchronisation strategy.
+    SpinBarrier,
     /// Represents the barrier synchronisation strategy.
     Barrier,
 }
@@ -39,6 +44,7 @@ impl std::str::FromStr for Strategy {
     fn from_str(s: &str) -> err::Result<Self> {
         match s {
             string::SPINNER => Ok(Self::Spinner),
+            string::SPIN_BARRIER => Ok(Self::SpinBarrier),
             string::BARRIER => Ok(Self::Barrier),
             s => Err(err::Error::BadSyncStrategy(s.to_owned())),
         }
@@ -53,6 +59,7 @@ impl std::fmt::Display for Strategy {
             "{}",
             match self {
                 Self::Spinner => string::SPINNER,
+                Self::SpinBarrier => string::SPIN_BARRIER,
                 Self::Barrier => string::BARRIER,
             }
         )
@@ -61,7 +68,7 @@ impl std::fmt::Display for Strategy {
 
 impl Strategy {
     pub fn all() -> impl Iterator<Item = Self> {
-        vec![Self::Spinner, Self::Barrier].into_iter()
+        vec![Self::Spinner, Self::SpinBarrier, Self::Barrier].into_iter()
     }
 
     /// Gets the correct factory method for the synchronisation primitive
@@ -69,6 +76,7 @@ impl Strategy {
     pub fn to_factory(&self) -> sync::Factory {
         match self {
             Self::Barrier => sync::make_barrier,
+            Self::SpinBarrier => sync::make_spin_barrier,
             Self::Spinner => sync::make_spinner,
         }
     }

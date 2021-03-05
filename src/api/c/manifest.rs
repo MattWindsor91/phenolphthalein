@@ -2,7 +2,7 @@ use crate::{
     err,
     model::{manifest, slot},
 };
-use std::ffi;
+use std::{convert::TryFrom, ffi, num::NonZeroUsize};
 
 /// The raw manifest structure that the test implements to communicate auxiliary
 /// information to the test runner.
@@ -56,14 +56,12 @@ impl Manifest {
 
     /// Tries to convert this C manifest to the standard structure.
     pub(super) fn to_manifest(&self) -> err::Result<manifest::Manifest> {
-        if self.n_threads == 0 {
-            Err(err::Error::NotEnoughThreads)
-        } else {
-            Ok(manifest::Manifest {
-                n_threads: self.n_threads,
-                i32s: self.i32_map(),
-            })
-        }
+        let n_threads =
+            NonZeroUsize::try_from(self.n_threads).map_err(|_| err::Error::NotEnoughThreads)?;
+        Ok(manifest::Manifest {
+            n_threads,
+            i32s: self.i32_map(),
+        })
     }
 }
 

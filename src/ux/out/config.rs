@@ -20,7 +20,7 @@ pub enum Choice {
 impl Choice {
     /// Constructs the appropriate outputter for the choice, using the given
     /// writer.
-    pub fn to_outputter<'a, W: Write + 'a>(self, writer: W) -> Box<dyn abs::Outputter + 'a> {
+    pub fn into_outputter<'a, W: Write + 'a>(self, writer: W) -> Box<dyn abs::Outputter + 'a> {
         match self {
             Self::Histogram => Box::new(histo::Histogram::new(writer)),
             Self::Json => Box::new(json::Json::new(writer)),
@@ -71,8 +71,8 @@ pub struct Config {
 
 impl Config {
     /// Constructs the appropriate outputter for the spec.
-    pub fn to_outputter<'a>(self) -> Box<dyn abs::Outputter + 'a> {
-        self.choice.to_outputter(self.writer)
+    pub fn into_outputter<'a>(self) -> Box<dyn abs::Outputter + 'a> {
+        self.choice.into_outputter(self.writer)
     }
 }
 
@@ -95,6 +95,6 @@ pub trait Outputtable {
 
 impl Outputtable for Report {
     fn output(self, on: Config) -> err::Result<()> {
-        on.to_outputter().output(self)
+        on.into_outputter().output(self)
     }
 }
