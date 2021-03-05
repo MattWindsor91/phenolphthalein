@@ -26,7 +26,7 @@ fn app<'a, 'b>() -> App<'a, 'b> {
         .arg(
             Arg::with_name(ux::clap::arg::CHECK)
                 .help("Checking strategy to use")
-                .short("-c")
+                .short("-C")
                 .long("--check")
                 .value_name("STRATEGY")
                 .possible_values(config::check::string::ALL),
@@ -34,7 +34,7 @@ fn app<'a, 'b>() -> App<'a, 'b> {
         .arg(
             Arg::with_name(ux::clap::arg::PERMUTE)
                 .help("Permuting strategy to use")
-                .short("-p")
+                .short("-P")
                 .long("--permute")
                 .value_name("STRATEGY")
                 .possible_values(config::permute::string::ALL),
