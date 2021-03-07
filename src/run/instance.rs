@@ -17,7 +17,6 @@ pub struct Instance<'a, T: abs::Entry<'a>> {
     kicked up profound questions about how to send the result back through
     threads, how to make sure that we don't try resurrect parts of a test
     at different times, etc. */
-
     /// The underlying inner vector, used to create and resurrect automata.
     vec: Vec<fsa::Inner<'a, T>>,
 }

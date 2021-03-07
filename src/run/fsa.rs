@@ -10,16 +10,17 @@ use std::{
     },
 };
 
-/// A test handle that is ready to send to its thread.
+/// The initial state of a thread's finite state automaton.
+///
+/// This is separate from [Running] as it unambiguously identifies a thread that
+/// has not yet started.  As such, it can be sent across threads, whereas a
+/// [Running] thread cannot.
 pub struct Ready<'a, T: Entry<'a>>(pub(super) Inner<'a, T>);
 
 impl<'a, T: Entry<'a>> Ready<'a, T> {
-    /* TODO(@MattWindsor91): is this separation necessary, or should [Ready]
-       and [Runnable] be the same thing? */
-
-    /// Consumes this [Ready] and produces a [Runnable].
-    pub fn start(self) -> Runnable<'a, T> {
-        Runnable(self.0)
+    /// Consumes this [Ready] and produces a [Running].
+    pub fn start(self) -> Running<'a, T> {
+        Running(self.0)
     }
 }
 
@@ -45,16 +46,16 @@ impl<'a, T: Entry<'a>> HasTid for Ready<'a, T> {
     }
 }
 
-/// A test handle that is in the runnable position.
-pub struct Runnable<'a, T: Entry<'a>>(Inner<'a, T>);
+/// A test handle that is in the Running position.
+pub struct Running<'a, T: Entry<'a>>(Inner<'a, T>);
 
-impl<'a, T: Entry<'a>> HasTid for Runnable<'a, T> {
+impl<'a, T: Entry<'a>> HasTid for Running<'a, T> {
     fn tid(&self) -> usize {
         self.0.tid
     }
 }
 
-impl<'a, T: Entry<'a>> Runnable<'a, T> {
+impl<'a, T: Entry<'a>> Running<'a, T> {
     /// Runs this automaton to completion.
     pub fn run(mut self) -> Done {
         loop {
@@ -77,7 +78,7 @@ impl<'a, T: Entry<'a>> Runnable<'a, T> {
 
         unsafe { self.0.run() };
         if self.0.sync.run() {
-            RunOutcome::Observe(Observable(self.0))
+            RunOutcome::Observe(Observing(self.0))
         } else {
             RunOutcome::Wait(Waiting(self.0))
         }
@@ -88,14 +89,14 @@ impl<'a, T: Entry<'a>> Runnable<'a, T> {
     }
 }
 
-/// Enumeration of outcomes from running a `Runnable`.
+/// Enumeration of outcomes from running a `Running`.
 pub enum RunOutcome<'a, T: Entry<'a>> {
     /// The test has finished.
     Done(Done),
     /// This thread should wait until it can run again.
     Wait(Waiting<'a, T>),
     /// This thread should read the current state, then wait until it can run again.
-    Observe(Observable<'a, T>),
+    Observe(Observing<'a, T>),
 }
 
 /// A test handle that is in the waiting position.
@@ -108,24 +109,24 @@ impl<'a, T: Entry<'a>> HasTid for Waiting<'a, T> {
 }
 
 impl<'a, T: Entry<'a>> Waiting<'a, T> {
-    pub fn wait(self) -> Runnable<'a, T> {
+    pub fn wait(self) -> Running<'a, T> {
         self.0.sync.wait();
-        Runnable(self.0)
+        Running(self.0)
     }
 }
 
-/// A test handle that is in the observable position.
-pub struct Observable<'a, T: Entry<'a>>(Inner<'a, T>);
+/// A state that can observe the current tester shared state.
+pub struct Observing<'a, T: Entry<'a>>(Inner<'a, T>);
 
-impl<'a, T: Entry<'a>> HasTid for Observable<'a, T> {
+impl<'a, T: Entry<'a>> HasTid for Observing<'a, T> {
     fn tid(&self) -> usize {
         self.0.tid
     }
 }
 
-impl<'a, T: Entry<'a>> Observable<'a, T> {
-    /// Observes the shared state, returning back to a runnable state.
-    pub fn observe(mut self) -> Runnable<'a, T> {
+impl<'a, T: Entry<'a>> Observing<'a, T> {
+    /// Observes the shared state, returning back to a Running state.
+    pub fn observe(mut self) -> Running<'a, T> {
         // We can't map_or_else here, because both legs move self.
         if let Some(kill_type) = self.shared_state().observe() {
             self.kill(kill_type)
@@ -134,12 +135,12 @@ impl<'a, T: Entry<'a>> Observable<'a, T> {
         }
     }
 
-    /// Borrows access to the shared state exposed by this `Observable`.
+    /// Borrows access to the shared state exposed by this `Observing`.
     pub fn shared_state(&mut self) -> &mut shared::State<'a, T::Env> {
         /* This is safe provided that the FSA's synchroniser correctly
-        guarantees only one automaton can be in the Observable state
+        guarantees only one automaton can be in the Observing state
         at any given time, and remains in it for the duration of this
-        mutable borrow (note that relinquishing Observable requires
+        mutable borrow (note that relinquishing Observing requires
         taking ownership of it). */
 
         unsafe { &mut *self.0.tester_state.get() }
@@ -147,14 +148,14 @@ impl<'a, T: Entry<'a>> Observable<'a, T> {
 
     /// Relinquishes the ability to observe the environment, and returns to a
     /// running state.
-    pub fn relinquish(self) -> Runnable<'a, T> {
+    pub fn relinquish(self) -> Running<'a, T> {
         self.0.sync.obs();
-        Runnable(self.0)
+        Running(self.0)
     }
 
     /// Relinquishes the ability to observe the environment, marks the test as
     /// dead, and returns to a waiting state.
-    pub fn kill(self, state: halt::Type) -> Runnable<'a, T> {
+    pub fn kill(self, state: halt::Type) -> Running<'a, T> {
         /* TODO(@MattWindsor91): maybe return Done here, and mock up waiting
         on the final barrier, or return Waiting<Done> somehow. */
         self.0.set_halt_state(Some(state));
@@ -258,8 +259,8 @@ impl<'a, T: Entry<'a>> Inner<'a, T> {
     /// Runs the inner handle's entry with the current environment.
     ///
     /// Unsafe because there may be mutable references to the environment held
-    /// by safe code (in [Observable]s), and we rely on the [Inner]'s owning
-    /// state structs (eg [Runnable]) to implement the right form of
+    /// by safe code (in [Observing]s), and we rely on the [Inner]'s owning
+    /// state structs (eg [Running]) to implement the right form of
     /// synchronisation.
     unsafe fn run(&self) {
         let env = &(*self.tester_state.get()).env.env;
