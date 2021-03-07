@@ -14,13 +14,16 @@ use std::{
 pub struct Ready<'a, T: Entry<'a>>(pub(super) Inner<'a, T>);
 
 impl<'a, T: Entry<'a>> Ready<'a, T> {
-    /// Consumes this `Ready` and produces a `Runnable`.
+    /* TODO(@MattWindsor91): is this separation necessary, or should [Ready]
+       and [Runnable] be the same thing? */
+
+    /// Consumes this [Ready] and produces a [Runnable].
     pub fn start(self) -> Runnable<'a, T> {
         Runnable(self.0)
     }
 }
 
-/// We can 'safely' send ReadyTests across thread boundaries.
+/// We can 'safely' send Ready states across thread boundaries.
 ///
 /// Of course, the entire point of concurrency testing is to find concurrency
 /// bugs, and these can often manifest as a violation of the sorts of rules
@@ -31,7 +34,7 @@ impl<'a, T: Entry<'a>> Ready<'a, T> {
 /// in respect to the thread barriers.
 unsafe impl<'a, T: Entry<'a>> Send for Ready<'a, T> {}
 
-/// We can 'safely' send references to Envs across thread boundaries.
+/// We can 'safely' send Ready states across thread boundaries.
 ///
 /// See the Sync implementation for the handwave.
 unsafe impl<'a, T: Entry<'a>> Sync for Ready<'a, T> {}

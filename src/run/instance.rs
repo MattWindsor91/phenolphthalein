@@ -4,14 +4,21 @@ use crate::{api::abs, err};
 
 /// A single instance of a test, ready to be permuted and run.
 ///
-/// An [Instance] consists of multiple finite state automata (see
-/// [super::fsa]), which can be
-///
-/// We can always decompose a `Set` into a single set of use-once FSAs,
-/// but it is unsafe to clone the set whenever the existing set is being used,
-/// and so we only provide specific support for reconstituting `Set`s at
-/// the end of particular patterns of use.
+/// An [Instance] manages multiple finite state automata (see
+/// [super::fsa]), and allows controlled running of them over particular
+/// [super::thread::Threader]s.
 pub struct Instance<'a, T: abs::Entry<'a>> {
+    /* TODO(@MattWindsor91):
+
+    Ideally, we would store a vector of [fsa::Ready] here, and that would
+    drop the weird dependency we have on [fsa::Inner].  This would need the
+    ability to convert a vector of [fsa::Done] into a vector of [fsa::Ready],
+    and every time I've tried to insert [fsa::Inner] into [fsa::Done] it's
+    kicked up profound questions about how to send the result back through
+    threads, how to make sure that we don't try resurrect parts of a test
+    at different times, etc. */
+
+    /// The underlying inner vector, used to create and resurrect automata.
     vec: Vec<fsa::Inner<'a, T>>,
 }
 
