@@ -1,19 +1,17 @@
 //! The main testing finite state automaton, and helper functions for it.
 
-use super::{
-    halt,
-    permute::{HasTid, Permuter},
-    shared, sync,
-};
+use super::{halt, permute::HasTid, shared, sync};
 use crate::{api::abs::Entry, err};
-use std::cell::UnsafeCell;
-use std::sync::{
-    atomic::{AtomicU8, Ordering},
-    Arc,
+use std::{
+    cell::UnsafeCell,
+    sync::{
+        atomic::{AtomicU8, Ordering},
+        Arc,
+    },
 };
 
 /// A test handle that is ready to send to its thread.
-pub struct Ready<'a, T: Entry<'a>>(Inner<'a, T>);
+pub struct Ready<'a, T: Entry<'a>>(pub(super) Inner<'a, T>);
 
 impl<'a, T: Entry<'a>> Ready<'a, T> {
     /// Consumes this `Ready` and produces a `Runnable`.
@@ -54,8 +52,19 @@ impl<'a, T: Entry<'a>> HasTid for Runnable<'a, T> {
 }
 
 impl<'a, T: Entry<'a>> Runnable<'a, T> {
-    /// Runs another iteration of this FSA's thread body.
-    pub fn run(self) -> RunOutcome<'a, T> {
+    /// Runs this automaton to completion.
+    pub fn run(mut self) -> Done {
+        loop {
+            match self.step() {
+                RunOutcome::Done(d) => break d,
+                RunOutcome::Wait(w) => self = w.wait(),
+                RunOutcome::Observe(o) => self = o.observe(),
+            }
+        }
+    }
+
+    /// Runs a single iteration of this automaton.
+    pub fn step(self) -> RunOutcome<'a, T> {
         if let Some(halt_type) = self.halt_type() {
             return RunOutcome::Done(Done {
                 tid: self.0.tid,
@@ -112,6 +121,16 @@ impl<'a, T: Entry<'a>> HasTid for Observable<'a, T> {
 }
 
 impl<'a, T: Entry<'a>> Observable<'a, T> {
+    /// Observes the shared state, returning back to a runnable state.
+    pub fn observe(mut self) -> Runnable<'a, T> {
+        // We can't map_or_else here, because both legs move self.
+        if let Some(kill_type) = self.shared_state().observe() {
+            self.kill(kill_type)
+        } else {
+            self.relinquish()
+        }
+    }
+
     /// Borrows access to the shared state exposed by this `Observable`.
     pub fn shared_state(&mut self) -> &mut shared::State<'a, T::Env> {
         /* This is safe provided that the FSA's synchroniser correctly
@@ -155,7 +174,10 @@ impl HasTid for Done {
 }
 
 /// Hidden implementation of all the various automaton states.
-struct Inner<'a, T: Entry<'a>> {
+///
+/// The implementation of [super::instance] depends on this implementation at the
+/// moment, but this may change.
+pub(super) struct Inner<'a, T: Entry<'a>> {
     /// The thread ID of this automaton.
     tid: usize,
 
@@ -177,7 +199,8 @@ struct Inner<'a, T: Entry<'a>> {
 }
 
 impl<'a, T: Entry<'a>> Inner<'a, T> {
-    fn new(
+    /// Constructs the inner state for an automaton.
+    pub(super) fn new(
         tid: usize,
         tester_state: shared::State<'a, T::Env>,
         entry: T,
@@ -193,7 +216,7 @@ impl<'a, T: Entry<'a>> Inner<'a, T> {
     }
 
     /// Atomically sets (or erases) the halt state flag.
-    fn set_halt_state(&self, state: Option<halt::Type>) {
+    pub fn set_halt_state(&self, state: Option<halt::Type>) {
         self.halt_state
             .store(state.map(halt::Type::to_u8).unwrap_or(0), Ordering::Release);
     }
@@ -202,7 +225,7 @@ impl<'a, T: Entry<'a>> Inner<'a, T> {
     ///
     /// This is safe, but can fail if more than one `Inner` exists at this
     /// stage.
-    fn get_state(self) -> err::Result<shared::State<'a, T::Env>> {
+    pub fn get_state(self) -> err::Result<shared::State<'a, T::Env>> {
         let cell = Arc::try_unwrap(self.tester_state).map_err(|_| err::Error::LockReleaseFailed)?;
         Ok(cell.into_inner())
     }
@@ -220,7 +243,7 @@ impl<'a, T: Entry<'a>> Inner<'a, T> {
 
     /// Produces a vector of inner handles with thread IDs from 0 up to this
     /// handle's thread ID.
-    fn replicate(self) -> Vec<Self> {
+    pub(super) fn replicate(self) -> Vec<Self> {
         let mut vec = Vec::with_capacity(self.tid + 1);
         for tid in 0..self.tid {
             vec.push(self.clone_with_tid(tid));
@@ -232,8 +255,8 @@ impl<'a, T: Entry<'a>> Inner<'a, T> {
     /// Runs the inner handle's entry with the current environment.
     ///
     /// Unsafe because there may be mutable references to the environment held
-    /// by safe code (in `Observable`s), and we rely on the `Inner`'s owning
-    /// state structs (eg `Runnable`) to implement the right form of
+    /// by safe code (in [Observable]s), and we rely on the [Inner]'s owning
+    /// state structs (eg [Runnable]) to implement the right form of
     /// synchronisation.
     unsafe fn run(&self) {
         let env = &(*self.tester_state.get()).env.env;
@@ -246,128 +269,4 @@ impl<'a, T: Entry<'a>> Clone for Inner<'a, T> {
     fn clone(&self) -> Self {
         self.clone_with_tid(self.tid)
     }
-}
-
-/// A set of test FSAs, ready to be sent to threads and run.
-///
-/// We can always decompose a `Set` into a single set of use-once FSAs,
-/// but it is unsafe to clone the set whenever the existing set is being used,
-/// and so we only provide specific support for reconstituting `Set`s at
-/// the end of particular patterns of use.
-pub struct Set<'a, T: Entry<'a>> {
-    vec: Vec<Inner<'a, T>>,
-}
-
-impl<'a, T: Entry<'a>> Set<'a, T> {
-    /// Spawns a series of threadlike objects using the FSAs in this set,
-    /// joins on each to retrieve evidence that the FSA is done, and returns
-    /// the outcome of the run (possibly containing another set).
-    ///
-    /// This method exists to allow situations where we want to re-run the FSAs
-    /// of a test on multiple thread configurations, and attempts to prevent
-    /// unsafe parallel usage of more FSAs at once than the test was built to
-    /// handle.
-    pub fn run<'scope, R: Threader<'a, 'scope>, P: Permuter<Ready<'a, T>> + ?Sized>(
-        self,
-        threader: &'scope R,
-        permuter: &mut P,
-    ) -> err::Result<Outcome<'a, T>> {
-        // TODO(@MattWindsor91): the observations should only be visible from the environment once we've joined these threads
-        // in general, all of the thread-unsafe stuff should be hidden inside the environment
-        let handles = self.spawn_all(threader, permuter);
-        self.into_outcome(join_all(handles, threader)?)
-    }
-
-    /// Makes a ready state for every thread in this set, permutes them if
-    /// necessary, and uses the threader to spawn a threadlike object.
-    ///
-    /// Ensures each thread will be spawned before returning.
-    fn spawn_all<'scope, R: Threader<'a, 'scope>, P: Permuter<Ready<'a, T>> + ?Sized>(
-        &self,
-        threader: &'scope R,
-        permuter: &mut P,
-    ) -> Vec<err::Result<R::Handle>> {
-        let mut ready: Vec<Ready<'a, T>> = self.vec.iter().map(|i| Ready(i.clone())).collect();
-        permuter.permute(&mut ready);
-        ready.into_iter().map(|x| threader.spawn(x)).collect()
-    }
-
-    fn into_outcome(self, halt_type: halt::Type) -> err::Result<Outcome<'a, T>> {
-        let inner = self.inner()?;
-        Ok(match halt_type {
-            halt::Type::Rotate => {
-                // If we don't do this, then threads will spawn, immediately
-                // think they need to rotate again, and fail to advance.
-                inner.set_halt_state(None);
-                Outcome::Rotate(self)
-            }
-            halt::Type::Exit => {
-                // Making sure the reference count for the tester state is 1.
-                let inc = inner.clone();
-                drop(self);
-                Outcome::Exit(inc.get_state()?)
-            }
-        })
-    }
-
-    /// Borrows the inner state of one of the threads in this set.
-    ///
-    /// It is undefined as to which thread will be picked on for this borrowing,
-    /// but most of the inner state is shared through `Arc`s and so this detail
-    /// usually doesn't matter.
-    fn inner(&self) -> err::Result<&Inner<'a, T>> {
-        self.vec.first().ok_or(err::Error::NotEnoughThreads)
-    }
-
-    /// Constructs a `Set` from a test entry point and its associated manifest.
-    ///
-    /// This function relies on the manifest and entry point matching up; it
-    /// presently relies on the rest of the runner infrastructure ensuring
-    /// this.
-    pub(super) fn new(
-        entry: T,
-        sync: sync::Factory,
-        tester_state: shared::State<'a, T::Env>,
-    ) -> err::Result<Self> {
-        let nthreads = tester_state.env.manifest.n_threads;
-        let sync = sync(nthreads)?;
-        let last = Inner::new(nthreads.get() - 1, tester_state, entry, sync);
-        Ok(Set {
-            vec: last.replicate(),
-        })
-    }
-}
-
-/// Enumeration of outcomes that can occur when running a set.
-pub enum Outcome<'a, T: Entry<'a>> {
-    /// The test should run again with a new rotation; the set is returned to
-    /// facilitate this.
-    Rotate(Set<'a, T>),
-    /// The test has exited, and the tester state passed outwards for
-    /// inspection.
-    Exit(shared::State<'a, T::Env>),
-}
-/// Trait for things that can 'run' a test automaton as a thread.
-pub trait Threader<'a, 'scope> {
-    /// The type of thread handles.
-    type Handle;
-
-    /// Spawns a runner for a ready state, returning a handle.
-    fn spawn<E: Entry<'a>>(&'scope self, state: Ready<'a, E>) -> err::Result<Self::Handle>;
-
-    /// Joins a handle, returning the done state of the FSA.
-    fn join(&'scope self, handle: Self::Handle) -> err::Result<Done>;
-}
-
-fn join_all<'a, 'scope, R: Threader<'a, 'scope>>(
-    handles: Vec<err::Result<R::Handle>>,
-    runner: &'scope R,
-) -> err::Result<halt::Type> {
-    let mut halt_type = halt::Type::Exit;
-    for h in handles {
-        let done = runner.join(h?)?;
-        // These'll be the same, so it doesn't matter which we grab.
-        halt_type = done.halt_type;
-    }
-    Ok(halt_type)
 }

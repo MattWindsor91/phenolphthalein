@@ -177,15 +177,14 @@ impl Strategy {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     /// Tests that the ALL constant reflects the result of getting strings for
     /// each strategy in turn.
     #[test]
     fn test_all_strings_in_sync() {
-        let got_set: std::collections::HashSet<String> =
-            string::ALL.into_iter().map(|x| x.to_string()).collect();
-        let want_set: std::collections::HashSet<String> =
-            Strategy::all().map(|x| Strategy::to_string(&x)).collect();
+        let got_set: HashSet<String> = string::ALL.into_iter().map(|x| x.to_string()).collect();
+        let want_set = Strategy::all().map(|x| Strategy::to_string(&x)).collect();
         assert_eq!(got_set, want_set)
     }
 }

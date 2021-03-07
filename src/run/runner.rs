@@ -1,8 +1,8 @@
 //! The high-level test runner.
 //!
 use super::{
-    fsa, halt, obs, permute,
-    permute::{HasTid, Permuter},
+    fsa, halt, instance, obs,
+    permute::{self, Permuter},
     shared, sync,
 };
 use crate::{api::abs, err, model};
@@ -69,10 +69,13 @@ impl<'a, T: abs::Entry<'a>> Builder<'a, T> {
     pub fn build(&self) -> err::Result<Runner<'a, T>> {
         let manifest = self.entry.make_manifest()?;
         let shared = self.make_shared_state(manifest)?;
-        let automata = fsa::Set::new(self.entry.clone(), self.sync, shared)?;
 
         Ok(Runner {
-            automata: Some(automata),
+            instance: Some(instance::Instance::new(
+                self.entry.clone(),
+                self.sync,
+                shared,
+            )?),
             permuter: (self.permuter)(),
             report: None,
         })
@@ -95,68 +98,37 @@ impl<'a, T: abs::Entry<'a>> Builder<'a, T> {
     }
 }
 
+/// A top-level runner for a particular
 pub struct Runner<'a, T: abs::Entry<'a>> {
-    automata: Option<fsa::Set<'a, T>>,
+    instance: Option<instance::Instance<'a, T>>,
     report: Option<model::report::Report>,
     permuter: Box<dyn Permuter<fsa::Ready<'a, T>> + 'a>,
-}
-
-impl<'a, 'scope> fsa::Threader<'a, 'scope> for &'scope crossbeam::thread::Scope<'a> {
-    type Handle = crossbeam::thread::ScopedJoinHandle<'scope, fsa::Done>;
-
-    fn spawn<T: abs::Entry<'a> + 'a>(
-        &'scope self,
-        automaton: fsa::Ready<'a, T>,
-    ) -> err::Result<Self::Handle> {
-        let builder = self.builder().name(format!("P{0}", automaton.tid()));
-        Ok(builder.spawn(move |_| run_thread(automaton.start()))?)
-    }
-
-    fn join(&'scope self, handle: Self::Handle) -> err::Result<fsa::Done> {
-        handle.join().map_err(|_| err::Error::ThreadPanic)
-    }
 }
 
 impl<'a, T: abs::Entry<'a>> Runner<'a, T> {
     /// Runs the Runner's test until it exits.
     pub fn run(mut self) -> err::Result<model::report::Report> {
-        while let Some(am) = self.automata.take() {
+        while let Some(am) = self.instance.take() {
             match self.run_rotation(am)? {
-                fsa::Outcome::Rotate(am) => {
-                    self.automata.replace(am);
+                instance::Outcome::Rotate(am) => {
+                    self.instance.replace(am);
                 }
-                fsa::Outcome::Exit(state) => self.make_report(state),
+                instance::Outcome::Exit(state) => self.make_report(state),
             }
         }
         // TODO(@MattWindsor91): for now
         self.report.ok_or(err::Error::LockReleaseFailed)
     }
 
-    fn run_rotation(&mut self, automata: fsa::Set<'a, T>) -> err::Result<fsa::Outcome<'a, T>> {
+    fn run_rotation(
+        &mut self,
+        automata: instance::Instance<'a, T>,
+    ) -> err::Result<instance::Outcome<'a, T>> {
         crossbeam::thread::scope(|s| automata.run(&s, &mut *self.permuter))
             .map_err(|_| err::Error::ThreadPanic)?
     }
 
     fn make_report(&mut self, state: shared::State<'a, T::Env>) {
         self.report.replace(state.observer.into_report());
-    }
-}
-
-fn run_thread<'a, T: abs::Entry<'a>>(mut t: fsa::Runnable<'a, T>) -> fsa::Done {
-    loop {
-        match t.run() {
-            fsa::RunOutcome::Done(d) => break d,
-            fsa::RunOutcome::Wait(w) => t = w.wait(),
-            fsa::RunOutcome::Observe(o) => t = observe(o),
-        }
-    }
-}
-
-fn observe<'a, T: abs::Entry<'a>>(mut o: fsa::Observable<'a, T>) -> fsa::Runnable<'a, T> {
-    let shared = o.shared_state();
-    if let Some(exit_type) = shared.observe() {
-        o.kill(exit_type)
-    } else {
-        o.relinquish()
     }
 }
