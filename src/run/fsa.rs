@@ -2,16 +2,10 @@
 
 use super::{halt, permute::HasTid, shared, sync};
 use crate::{api::abs::Entry, err};
-use std::{
-    cell::UnsafeCell,
-    sync::{
-        atomic::{AtomicU8, Ordering},
-        Arc,
-    },
-};
+use std::{cell::UnsafeCell, sync::Arc};
 
 /// An automaton, parametrised over its current state's phantom type.
-pub struct Automaton<'a, S: State, T: Entry<'a>> {
+pub struct Automaton<'entry, S: State, T: Entry<'entry>> {
     /// The specific state type.
     ///
     /// This cannot safely be changed in general, for reasons that should be
@@ -23,7 +17,7 @@ pub struct Automaton<'a, S: State, T: Entry<'a>> {
 
     /// Wraps shared tester state in such a way that it can become mutable when
     /// we are in the `Observing` state.
-    tester_state: Arc<UnsafeCell<shared::State<'a, T::Env>>>,
+    tester_state: Arc<UnsafeCell<shared::State<'entry, T::Env>>>,
 
     /// The test entry point, used when running the test body.
     entry: T,
@@ -35,40 +29,39 @@ pub struct Automaton<'a, S: State, T: Entry<'a>> {
     /// rotate its threads, and exit when it decides the test should
     /// be stopped; once set to either, all threads will stop the test the next
     /// time they try to run the test.
-    halt_state: Arc<AtomicU8>,
+    halt_signal: Arc<halt::Signal>,
 }
 
 /// Automata always have a thread ID associated.
-impl<'a, S: State, E: Entry<'a>> HasTid for Automaton<'a, S, E> {
+impl<'entry, S: State, E: Entry<'entry>> HasTid for Automaton<'entry, S, E> {
     fn tid(&self) -> usize {
         self.tid
     }
 }
 
-impl<'a, S: State, E: Entry<'a>> Automaton<'a, S, E> {
-    /// Atomically sets (or erases) the halt state flag.
-    pub fn set_halt_state(&self, state: Option<halt::Type>) {
-        self.halt_state
-            .store(state.map(halt::Type::to_u8).unwrap_or(0), Ordering::Release);
+impl<'entry, S: State, E: Entry<'entry>> Automaton<'entry, S, E> {
+    /// Gets access to the halting signal.
+    pub fn halt_signal(&self) -> Arc<halt::Signal> {
+        self.halt_signal.clone()
     }
 
     /// Pulls the tester state out of an inner handle.
     ///
     /// This is safe, but can fail if more than one `Inner` exists at this
     /// stage.
-    pub fn into_shared_state(self) -> err::Result<shared::State<'a, E::Env>> {
+    pub fn into_shared_state(self) -> err::Result<shared::State<'entry, E::Env>> {
         let cell = Arc::try_unwrap(self.tester_state).map_err(|_| err::Error::LockReleaseFailed)?;
         Ok(cell.into_inner())
     }
 
-    unsafe fn change_state<T: State>(self) -> Automaton<'a, T, E> {
+    unsafe fn change_state<T: State>(self) -> Automaton<'entry, T, E> {
         Automaton {
             state: std::marker::PhantomData::default(),
             tid: self.tid,
             tester_state: self.tester_state,
             entry: self.entry,
             sync: self.sync,
-            halt_state: self.halt_state,
+            halt_signal: self.halt_signal,
         }
     }
 }
@@ -87,7 +80,7 @@ pub struct Ready;
 impl State for Ready {}
 
 /// Type alias for ready automata, which are common elsewhere.
-pub type ReadyAutomaton<'a, E> = Automaton<'a, Ready, E>;
+pub type ReadyAutomaton<'entry, E> = Automaton<'entry, Ready, E>;
 
 /// We can 'safely' send Ready states across thread boundaries.
 ///
@@ -98,14 +91,14 @@ pub type ReadyAutomaton<'a, E> = Automaton<'a, Ready, E>;
 /// The main rationale for this being 'mostly ok' to send across thread
 /// boundaries is that the test wrappers constrain the operations we can perform
 /// in respect to the thread barriers.
-unsafe impl<'a, E: Entry<'a>> Send for Automaton<'a, Ready, E> {}
+unsafe impl<'entry, E: Entry<'entry>> Send for ReadyAutomaton<'entry, E> {}
 
 /// We can 'safely' send Ready states across thread boundaries.
 ///
 /// See the Sync implementation for the handwave.
-unsafe impl<'a, E: Entry<'a>> Sync for Automaton<'a, Ready, E> {}
+unsafe impl<'entry, E: Entry<'entry>> Sync for ReadyAutomaton<'entry, E> {}
 
-impl<'a, E: Entry<'a>> Automaton<'a, Ready, E> {
+impl<'entry, E: Entry<'entry>> ReadyAutomaton<'entry, E> {
     /// Constructs an automaton.
     ///
     /// This takes full ownership of the shared tester state, but only
@@ -119,7 +112,7 @@ impl<'a, E: Entry<'a>> Automaton<'a, Ready, E> {
     /// wrapper.
     pub fn new(
         tid: usize,
-        tester_state: shared::State<'a, E::Env>,
+        tester_state: shared::State<'entry, E::Env>,
         entry: E,
         sync: Arc<dyn sync::Synchroniser>,
     ) -> Self {
@@ -127,7 +120,7 @@ impl<'a, E: Entry<'a>> Automaton<'a, Ready, E> {
             state: std::marker::PhantomData::default(),
             tid,
             sync,
-            halt_state: Arc::new(AtomicU8::new(0)),
+            halt_signal: Arc::new(halt::Signal::default()),
             tester_state: Arc::new(UnsafeCell::new(tester_state)),
             entry,
         }
@@ -157,7 +150,7 @@ impl<'a, E: Entry<'a>> Automaton<'a, Ready, E> {
             state: self.state,
             tid: new_tid,
             sync: self.sync.clone(),
-            halt_state: self.halt_state.clone(),
+            halt_signal: self.halt_signal.clone(),
             tester_state: self.tester_state.clone(),
             entry: self.entry.clone(),
         }
@@ -172,7 +165,7 @@ impl<'a, E: Entry<'a>> Automaton<'a, Ready, E> {
     }
 
     /// Consumes this [Ready] state and produces a [Running] state.
-    pub fn start(self) -> Automaton<'a, Running, E> {
+    pub fn start(self) -> Automaton<'entry, Running, E> {
         unsafe { self.change_state() }
     }
 }
@@ -182,7 +175,7 @@ pub struct Running;
 /// [Running] is a valid state.
 impl State for Running {}
 
-impl<'a, E: Entry<'a>> Automaton<'a, Running, E> {
+impl<'entry, E: Entry<'entry>> Automaton<'entry, Running, E> {
     /// Runs this automaton to completion.
     pub fn run(mut self) -> Done {
         loop {
@@ -195,8 +188,8 @@ impl<'a, E: Entry<'a>> Automaton<'a, Running, E> {
     }
 
     /// Runs a single iteration of this automaton.
-    pub fn step(self) -> RunOutcome<'a, E> {
-        if let Some(halt_type) = self.halt_type() {
+    pub fn step(self) -> RunOutcome<'entry, E> {
+        if let Some(halt_type) = self.halt_signal.get() {
             return RunOutcome::Done(Done {
                 tid: self.tid,
                 halt_type,
@@ -208,10 +201,6 @@ impl<'a, E: Entry<'a>> Automaton<'a, Running, E> {
             sync::Role::Observer => RunOutcome::Observe(unsafe { self.change_state() }),
             sync::Role::Waiter => RunOutcome::Wait(unsafe { self.change_state() }),
         }
-    }
-
-    fn halt_type(&self) -> Option<halt::Type> {
-        halt::Type::from_u8(self.halt_state.load(Ordering::Acquire))
     }
 
     /// Runs the entry with the current environment.
@@ -227,13 +216,13 @@ impl<'a, E: Entry<'a>> Automaton<'a, Running, E> {
 }
 
 /// Enumeration of outcomes from running a `Running`.
-pub enum RunOutcome<'a, T: Entry<'a>> {
+pub enum RunOutcome<'entry, T: Entry<'entry>> {
     /// The test has finished.
     Done(Done),
     /// This thread should wait until it can run again.
-    Wait(Automaton<'a, Waiting, T>),
+    Wait(Automaton<'entry, Waiting, T>),
     /// This thread should read the current state, then wait until it can run again.
-    Observe(Automaton<'a, Observing, T>),
+    Observe(Automaton<'entry, Observing, T>),
 }
 
 /// The state where the automaton is waiting for an [Observing] automaton to
@@ -243,10 +232,10 @@ pub struct Waiting;
 /// [Waiting] is a valid state.
 impl State for Waiting {}
 
-impl<'a, E: Entry<'a>> Automaton<'a, Waiting, E> {
+impl<'entry, E: Entry<'entry>> Automaton<'entry, Waiting, E> {
     /// Waits for the observing thread's automaton to move to the [Running]
     /// state, then also moves to the [Running] state.
-    pub fn wait(self) -> Automaton<'a, Running, E> {
+    pub fn wait(self) -> Automaton<'entry, Running, E> {
         self.sync.wait();
         unsafe { self.change_state() }
     }
@@ -258,9 +247,9 @@ pub struct Observing;
 /// [Observing] is a valid state.
 impl State for Observing {}
 
-impl<'a, E: Entry<'a>> Automaton<'a, Observing, E> {
+impl<'entry, E: Entry<'entry>> Automaton<'entry, Observing, E> {
     /// Observes the shared state, returning back to a Running state.
-    pub fn observe(mut self) -> Automaton<'a, Running, E> {
+    pub fn observe(mut self) -> Automaton<'entry, Running, E> {
         // We can't map_or_else here, because both legs move self.
         if let Some(kill_type) = self.shared_state().observe() {
             self.kill(kill_type)
@@ -270,7 +259,7 @@ impl<'a, E: Entry<'a>> Automaton<'a, Observing, E> {
     }
 
     /// Borrows access to the shared state exposed by this `Observing`.
-    pub fn shared_state(&mut self) -> &mut shared::State<'a, E::Env> {
+    pub fn shared_state(&mut self) -> &mut shared::State<'entry, E::Env> {
         /* This is safe provided that the FSA's synchroniser correctly
         guarantees only one automaton can be in the Observing state
         at any given time, and remains in it for the duration of this
@@ -282,17 +271,17 @@ impl<'a, E: Entry<'a>> Automaton<'a, Observing, E> {
 
     /// Relinquishes the ability to observe the environment, and returns to a
     /// running state.
-    pub fn relinquish(self) -> Automaton<'a, Running, E> {
+    pub fn relinquish(self) -> Automaton<'entry, Running, E> {
         self.sync.obs();
         unsafe { self.change_state() }
     }
 
     /// Relinquishes the ability to observe the environment, marks the test as
     /// dead, and returns to a waiting state.
-    pub fn kill(self, state: halt::Type) -> Automaton<'a, Running, E> {
+    pub fn kill(self, state: halt::Type) -> Automaton<'entry, Running, E> {
         /* TODO(@MattWindsor91): maybe return Done here, and mock up waiting
         on the final barrier, or return Waiting<Done> somehow. */
-        self.set_halt_state(Some(state));
+        self.halt_signal.set(state);
         self.relinquish()
     }
 }

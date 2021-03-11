@@ -92,19 +92,36 @@ pub enum Type {
     Exit,
 }
 
-impl Type {
-    /// Packs a ExitType into a state byte.
-    pub(super) const fn to_u8(self) -> u8 {
-        match self {
-            Self::Rotate => 1,
-            Self::Exit => 2,
-        }
+/// An atomic signal that conveys a halt type.
+pub struct Signal(std::sync::atomic::AtomicU8);
+
+/// The default signal is a cleared one.
+impl Default for Signal {
+    fn default() -> Self {
+        Self(std::sync::atomic::AtomicU8::default())
     }
-    /// Unpacks a ExitType from a state byte.
-    pub(super) const fn from_u8(x: u8) -> Option<Self> {
-        match x {
-            1 => Some(Self::Rotate),
-            2 => Some(Self::Exit),
+}
+
+impl Signal {
+    /// Clears any existing halt signal.
+    pub fn clear(&self) {
+        self.0.store(0, Ordering::Release)
+    }
+
+    /// Sets the halt signal's value to `ty`.
+    pub fn set(&self, ty: Type) {
+        let value = match ty {
+            Type::Rotate => 1,
+            Type::Exit => 2,
+        };
+        self.0.store(value, Ordering::Release)
+    }
+
+    /// Gets the halt signal, if any.
+    pub fn get(&self) -> Option<Type> {
+        match self.0.load(Ordering::Acquire) {
+            1 => Some(Type::Rotate),
+            2 => Some(Type::Exit),
             _ => None,
         }
     }

@@ -54,7 +54,7 @@ impl<'entry, E: abs::Entry<'entry>> Instance<'entry, E> {
             halt::Type::Rotate => {
                 // If we don't do this, then threads will spawn, immediately
                 // think they need to rotate again, and fail to advance.
-                self.top.set_halt_state(None);
+                self.top.halt_signal().clear();
                 Outcome::Rotate(self)
             }
             halt::Type::Exit => {
