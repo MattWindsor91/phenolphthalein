@@ -32,7 +32,7 @@ use std::{convert::TryFrom, num::NonZeroUsize};
 pub unsafe trait Synchroniser {
     /// Runner should call this after running;
     /// it returns whether the runner is an observer or not.
-    fn run(&self) -> bool;
+    fn run(&self) -> Role;
 
     /// Observer should call this after observing;
     /// it performs any necessary synchronisation.
@@ -43,11 +43,32 @@ pub unsafe trait Synchroniser {
     fn wait(&self);
 }
 
+/// Enumeration of roles that a synchroniser can hand out.
+pub enum Role {
+    /// The thread should call [Synchroniser::obs] next.
+    Observer,
+    /// The thread should call [Synchroniser::wait] next.
+    Waiter,
+}
+
+impl Role {
+    /// Maps from an `is_leader` boolean to a role.
+    pub fn from_leader(is_leader: bool) -> Self {
+        /* We could implement this directly as a From on BarrierWaitResult,
+        but we'd then have to implement it separately for std and spin. */
+        if is_leader {
+            Self::Observer
+        } else {
+            Self::Waiter
+        }
+    }
+}
+
 /// Barriers are synchronisers; each phase corresponds to a barrier wait, and
 /// observers are nominated through the barrier's own leader function.
 unsafe impl Synchroniser for Barrier {
-    fn run(&self) -> bool {
-        self.wait().is_leader()
+    fn run(&self) -> Role {
+        Role::from_leader(self.wait().is_leader())
     }
 
     fn obs(&self) {
@@ -62,8 +83,8 @@ unsafe impl Synchroniser for Barrier {
 /// Spin barriers are synchronisers; each phase corresponds to a barrier wait,
 /// and observers are nominated through the barrier's own leader function.
 unsafe impl Synchroniser for spin::Barrier {
-    fn run(&self) -> bool {
-        self.wait().is_leader()
+    fn run(&self) -> Role {
+        Role::from_leader(self.wait().is_leader())
     }
 
     fn obs(&self) {
@@ -102,20 +123,20 @@ impl Spinner {
 }
 
 unsafe impl Synchroniser for Spinner {
-    fn run(&self) -> bool {
+    fn run(&self) -> Role {
         let count = self.inner.fetch_sub(1, Ordering::AcqRel);
         assert!(0 < count, "count negative after run (={})", count);
 
         if count == 1 {
             // We were the last thread to be waited upon.
             self.inner.store(-self.nthreads, Ordering::Release);
-            true
+            Role::Observer
         } else {
             // We need to wait until the last thread runs.
             while self.inner.load(Ordering::Acquire) >= 0 {
-                // busy wait
+                std::hint::spin_loop()
             }
-            false
+            Role::Waiter
         }
     }
 

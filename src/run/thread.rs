@@ -4,24 +4,24 @@ use crate::{api::abs, err};
 
 /// Trait for things that can 'run' a test automaton as a thread.
 ///
-/// This trait combines the notion of spawning a [super::fsa::Ready] into a
+/// This trait combines the notion of spawning a [super::fsa::ReadyAutomaton] into a
 /// thread (producing a handle), and then joining it, eventually yielding a
 /// a [super::fsa::Done].
 pub trait Threader<'entry, 'scope> {
     /// The type of thread handles.
     type Handle;
 
-    /// Spawns a runner for a ready state, returning a handle.
+    /// Spawns a runner for an automaton, returning a handle.
     fn spawn<E: abs::Entry<'entry>>(
         &'scope self,
-        state: fsa::Ready<'entry, E>,
+        state: fsa::ReadyAutomaton<'entry, E>,
     ) -> err::Result<Self::Handle>;
 
-    /// Spawns a runner for each ready state in an iterable, returning a
+    /// Spawns a runner for each ReadyAutomaton state in an iterable, returning a
     /// vector of handles.
     fn spawn_all<E: abs::Entry<'entry>>(
         &'scope self,
-        automata: impl IntoIterator<Item = fsa::Ready<'entry, E>>,
+        automata: impl IntoIterator<Item = fsa::ReadyAutomaton<'entry, E>>,
     ) -> err::Result<Vec<Self::Handle>> {
         automata.into_iter().map(|x| self.spawn(x)).collect()
     }
@@ -49,7 +49,7 @@ impl<'a, 'scope> Threader<'a, 'scope> for &'scope crossbeam::thread::Scope<'a> {
 
     fn spawn<T: abs::Entry<'a> + 'a>(
         &'scope self,
-        automaton: fsa::Ready<'a, T>,
+        automaton: fsa::ReadyAutomaton<'a, T>,
     ) -> err::Result<Self::Handle> {
         let builder = self.builder().name(format!("P{0}", automaton.tid()));
         Ok(builder.spawn(move |_| automaton.start().run())?)
