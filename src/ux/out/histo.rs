@@ -40,14 +40,14 @@ impl<W: Write> Histogram<W> {
     }
 
     fn dump_state(&mut self, State { state, info }: State) -> io::Result<()> {
-        Ok(writeln!(
+        writeln!(
             self.w,
             "{occ}\t{sigil}>\t{state}\t(iter {iter})",
             occ = info.occurs,
             sigil = self.check_sigil(info.outcome),
             state = stringify_valuation(state),
             iter = info.iteration,
-        )?)
+        )
     }
 
     fn check_sigil(&self, r: model::Outcome) -> colored::ColoredString {

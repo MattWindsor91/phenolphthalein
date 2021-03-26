@@ -124,7 +124,7 @@ fn dump_config_path(path: &path::Path) {
 
 fn run_test(config: config::Config, input: &path::Path) -> anyhow::Result<model::Report> {
     let test = c::Test::load(input)?;
-    Ok(run_entry(config, test.spawn())?)
+    run_entry(config, test.spawn())
 }
 
 fn run_entry<'a, E: api::abs::Entry<'a>>(
