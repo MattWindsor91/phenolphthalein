@@ -71,6 +71,7 @@ pub struct Config {
 
 impl Config {
     /// Constructs the appropriate outputter for the spec.
+    #[must_use]
     pub fn into_outputter<'a>(self) -> Box<dyn abs::Outputter + 'a> {
         self.choice.into_outputter(self.writer)
     }
@@ -88,8 +89,13 @@ impl Default for Config {
 
 /// Trait used to add inline outputter methods to reports.
 pub trait Outputtable {
-    /// Outputs this item using the outputter chosen by `using`, onto the writer
+    /// Outputs this item onto the outputter chosen by `on`.
     /// `on`.
+    ///
+    /// # Errors
+    ///
+    /// Generally carries any errors caused by trying to `output` to the
+    /// outputter given by `on`.
     fn output(self, on: Config) -> err::Result<()>;
 }
 

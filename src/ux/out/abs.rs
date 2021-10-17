@@ -9,5 +9,9 @@ pub trait Outputter {
     ///
     /// This trait consumes the outputter, as there is no guarantee that any
     /// underlying resources can be used multiple times.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any I/O errors from outputting the report.
     fn output(self: Box<Self>, r: model::report::Report) -> err::Result<()>;
 }

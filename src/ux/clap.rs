@@ -34,11 +34,14 @@ pub mod arg {
 
 /// Gets the config file mentioned on the command line, or the default file if
 /// no such file was named.
+///
+/// # Errors
+///
+/// Fails if the config file argument can't be parsed.
 pub fn config_file(matches: &clap::ArgMatches) -> anyhow::Result<path::PathBuf> {
     matches
         .value_of(arg::CONFIG)
-        .map(|x| Ok(x.parse()?))
-        .unwrap_or_else(|| Ok(io::default_file()))
+        .map_or_else(|| Ok(io::default_file()), |x| Ok(x.parse()?))
 }
 
 /// Trait for things that can be updated from command line arguments taken from
@@ -46,6 +49,10 @@ pub fn config_file(matches: &clap::ArgMatches) -> anyhow::Result<path::PathBuf> 
 pub trait Clappable: Sized {
     /// Merges configuration from a clap match dictionary into this, potentially
     /// replacing it entirely.
+    ///
+    /// # Errors
+    ///
+    /// Propagates parsing failures from clap.
     fn parse_clap(self, matches: &clap::ArgMatches) -> err::Result<Self>;
 }
 
@@ -121,14 +128,14 @@ fn clap_or_default<T: Default + Clappable>(matches: &clap::ArgMatches) -> err::R
 }
 
 fn parse_or<T: FromStr>(int_str: Option<&str>, default: T) -> std::result::Result<T, T::Err> {
-    int_str.map_or(Ok(default), |s| s.parse())
+    int_str.map_or(Ok(default), str::parse)
 }
 
 fn parse_or_else<T: FromStr>(
     int_str: Option<&str>,
     default: impl FnOnce() -> T,
 ) -> std::result::Result<T, T::Err> {
-    int_str.map_or_else(|| Ok(default()), |s| s.parse())
+    int_str.map_or_else(|| Ok(default()), str::parse)
 }
 
 /// Actions that can be specified on the command line.

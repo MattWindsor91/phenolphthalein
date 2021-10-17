@@ -5,8 +5,8 @@ use crate::{api::abs, err};
 /// A single instance of a test, ready to be permuted and run.
 ///
 /// An [Instance] manages multiple finite state automata (see
-/// [super::fsa]), and allows controlled running of them over particular
-/// [super::thread::Threader]s.
+/// `super::fsa`), and allows controlled running of them over particular
+/// `super::thread::Threader`s.
 pub struct Instance<'entry, E: abs::Entry<'entry>> {
     /// A persistent copy of the ready automaton with the highest thread ID.
     ///

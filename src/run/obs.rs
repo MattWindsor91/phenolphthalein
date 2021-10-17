@@ -87,6 +87,7 @@ fn current_state<T: abs::Env>(env: &Manifested<T>) -> model::state::State {
 
 /// A summary of the observer's current state, useful for calculating test
 /// exit conditions.
+#[derive(Clone, Copy)]
 pub struct Summary {
     /// The number of iterations the observer has seen so far, including
     /// this one.  This number will saturate at usize.MAX.
@@ -115,7 +116,7 @@ impl<E: abs::Env> Manifested<E> {
     /// Resets the environment to the initial values in the manifest.
     pub fn reset(&mut self) {
         for r in self.manifest.i32s.values() {
-            self.env.set_i32(r.slot, r.initial_value.unwrap_or(0))
+            self.env.set_i32(r.slot, r.initial_value.unwrap_or(0));
         }
     }
 

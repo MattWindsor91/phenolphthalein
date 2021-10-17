@@ -27,11 +27,19 @@ impl Config {
     }
 
     /// Tries to dump a config to a string.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the underlying TOML conversion fails.
     pub fn to_string(&self) -> err::Result<String> {
         Ok(toml::to_string_pretty(self)?)
     }
 
     /// Dumps the configuration to stdout.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the underlying TOML conversion fails.
     pub fn dump(&self) -> err::Result<()> {
         println!("{}", self.to_string()?);
         Ok(())

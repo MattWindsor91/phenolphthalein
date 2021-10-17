@@ -20,7 +20,7 @@ pub trait Permuter<T: HasTid> {
 /// Any random number generator can be turned into a permuter.
 impl<'a, R: rand::Rng + ?Sized, T: HasTid> Permuter<T> for R {
     fn permute(&mut self, threads: &mut [T]) {
-        threads.shuffle(self)
+        threads.shuffle(self);
     }
 }
 
@@ -35,11 +35,13 @@ impl<T: HasTid> Permuter<T> for Nop {
 pub type Factory<T> = fn() -> Box<dyn Permuter<T>>;
 
 /// Makes a boxed permuter from the thread RNG.
+#[must_use]
 pub fn make_thread_rng<T: HasTid>() -> Box<dyn Permuter<T>> {
     Box::new(thread_rng())
 }
 
 /// Makes a no-operation boxed permuter.
+#[must_use]
 pub fn make_nop<T: HasTid>() -> Box<dyn Permuter<T>> {
     Box::new(Nop)
 }

@@ -26,8 +26,7 @@ pub enum Strategy {
     },
 }
 
-/// The default strategy uses the constants [DEFAULT_ITERATIONS] and
-/// [DEFAULT_PERIOD].
+/// The default strategy uses the constants `DEFAULT_ITERATIONS` and `DEFAULT_PERIOD`.
 impl Default for Strategy {
     fn default() -> Self {
         Self::from_ints(DEFAULT_ITERATIONS, DEFAULT_PERIOD)
@@ -48,15 +47,18 @@ impl Strategy {
     }
 
     /// Gets the number of iterations defined by this strategy.
+    #[must_use]
     pub fn iterations(&self) -> Option<NonZeroUsize> {
         match self {
-            Self::Exit { iterations } => Some(*iterations),
-            Strategy::ExitAndRotate { iterations, .. } => Some(*iterations),
+            Self::Exit { iterations } | Strategy::ExitAndRotate { iterations, .. } => {
+                Some(*iterations)
+            }
             _ => None,
         }
     }
 
     /// Gets the rotation period defined by this strategy.
+    #[must_use]
     pub fn period(&self) -> Option<NonZeroUsize> {
         match self {
             Strategy::ExitAndRotate { period, .. } => Some(*period),
@@ -65,6 +67,7 @@ impl Strategy {
     }
 
     /// Parses a strategy from a pair of iteration and period integers.
+    #[must_use]
     pub const fn from_ints(iterations: usize, period: usize) -> Self {
         match (NonZeroUsize::new(iterations), NonZeroUsize::new(period)) {
             (None, _) => Self::NoHalt,

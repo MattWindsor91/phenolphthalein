@@ -32,6 +32,7 @@ pub struct Reservation<T> {
 
 impl<T> Reservation<T> {
     /// Extends the slot reservation to account for this variable's slot.
+    #[must_use]
     pub fn add_slot(mut self, slot: Slot) -> Self {
         let count = if slot.is_atomic {
             &mut self.atomic

@@ -38,39 +38,19 @@ impl<E> Checker<E> for model::Outcome {
 /// Type alias of functions that return fully wrapped synchronisers.
 pub type Factory<'a, S, E> = fn(&S) -> Box<dyn Checker<E> + 'a>;
 
-/// Constructs a checker for any environment type that just returns [model::Outcome::Unknown].
+/// Constructs a checker for any environment type that just returns `model::Outcome::Unknown`.
 ///
-/// This gains nothing over just using [model::Outcome::Unknown] as a checker, except that it is
+/// This gains nothing over just using `box_unknown`, except that it is
 /// the right shape to be a [Factory].
+#[must_use]
 pub fn make_unknown<'a, T, E>(_: &T) -> Box<dyn Checker<E> + 'a> {
-    Box::new(model::Outcome::Unknown)
+    box_unknown()
 }
 
-/// Lifts an optional item `opt` into a boxed checker using `maker`, if it
-/// exists; returns a boxed checker that constantly returns
-/// [model::Outcome::Unknown] otherwise.
-///
-/// # Examples
-///
-/// ```
-/// use phenolphthalein::api::abs::check::{Checker, Factory, make_optional};
-/// use phenolphthalein::model::Outcome;
-/// let mut opt = Some(Outcome::Pass);
-/// let checker = make_optional(|x| Box::new(*x), &opt);
-/// assert_eq!(Outcome::Pass, checker.check(&()));
-/// opt.take();
-/// let checker = make_optional(|x| Box::new(*x), &opt);
-/// assert_eq!(Outcome::Unknown, checker.check(&()));
-/// ```
-pub fn make_optional<'a, E, T>(
-    maker: impl Fn(&T) -> Box<dyn Checker<E> + 'a>,
-    opt: &Option<T>,
-) -> Box<dyn Checker<E> + 'a> {
-    if let Some(precursor) = opt {
-        maker(precursor)
-    } else {
-        Box::new(model::Outcome::Unknown)
-    }
+/// Shorthand for constructing a boxed [Checker] that returns `model::Outcome::Unknown`.
+#[must_use]
+pub fn box_unknown<'a, E>() -> Box<dyn Checker<E> + 'a> {
+    Box::new(model::Outcome::Unknown)
 }
 
 #[cfg(test)]

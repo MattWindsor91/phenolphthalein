@@ -75,7 +75,7 @@ impl std::str::FromStr for Strategy {
     }
 }
 
-/// Formats a [Strategy] by applying the inverse of [FromStr].
+/// Formats a [Strategy] by applying the inverse of `FromStr`.
 impl std::fmt::Display for Strategy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -143,6 +143,7 @@ impl Strategy {
     }
 
     /// Retrieves any outcome being halted upon by this checking strategy.
+    #[must_use]
     pub fn halt_outcome(&self) -> Option<outcome::Outcome> {
         match self {
             Self::ExitOn(outcome) => Some(*outcome),
@@ -161,11 +162,14 @@ impl Strategy {
     /// assert!(!Strategy::Report.is_disabled());
     /// assert!(!Strategy::ExitOn(Outcome::Pass).is_disabled());
     /// ```
+    #[must_use]
     pub fn is_disabled(&self) -> bool {
         matches!(self, Self::Disable)
     }
 
-    pub fn to_factory<'a, T: abs::Entry<'a>>(&self) -> abs::check::Factory<'a, T, T::Env> {
+    /// Gets a checker factory from this checking strategy.
+    #[must_use]
+    pub fn to_factory<'a, T: abs::Entry<'a>>(self) -> abs::check::Factory<'a, T, T::Env> {
         if self.is_disabled() {
             abs::check::make_unknown
         } else {

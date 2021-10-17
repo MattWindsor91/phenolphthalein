@@ -28,6 +28,7 @@ impl Rule {
 
     /// Gets the sort of exit, if any, that should occur given this condition
     /// and the most recent observation os.
+    #[must_use]
     pub fn exit_type(&self, os: &obs::Summary) -> Option<Type> {
         self.condition.check(os).then(|| self.halt_type)
     }
@@ -47,6 +48,7 @@ pub enum Condition {
 
 impl Condition {
     /// Lifts this Condition to a Rule with halt type `halt_type`.
+    #[must_use]
     pub fn halt_with(self, halt_type: Type) -> Rule {
         Rule {
             condition: self,
@@ -55,11 +57,13 @@ impl Condition {
     }
 
     /// Lifts this condition to an exit Rule.
+    #[must_use]
     pub fn exit(self) -> Rule {
         self.halt_with(Type::Exit)
     }
 
     /// Lifts this condition to a rotation Rule.
+    #[must_use]
     pub fn rotate(self) -> Rule {
         self.halt_with(Type::Rotate)
     }
@@ -72,6 +76,7 @@ impl Condition {
     }
 
     /// Checks to see if this condition holds over `obs`.
+    #[must_use]
     pub fn check(&self, os: &obs::Summary) -> bool {
         match self {
             Self::EveryNIterations(n) => os.iterations % n.get() == 0,
@@ -105,7 +110,7 @@ impl Default for Signal {
 impl Signal {
     /// Clears any existing halt signal.
     pub fn clear(&self) {
-        self.0.store(0, Ordering::Release)
+        self.0.store(0, Ordering::Release);
     }
 
     /// Sets the halt signal's value to `ty`.
@@ -114,7 +119,7 @@ impl Signal {
             Type::Rotate => 1,
             Type::Exit => 2,
         };
-        self.0.store(value, Ordering::Release)
+        self.0.store(value, Ordering::Release);
     }
 
     /// Gets the halt signal, if any.

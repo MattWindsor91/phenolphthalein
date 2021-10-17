@@ -4,9 +4,9 @@ use crate::{api::abs, err};
 
 /// Trait for things that can 'run' a test automaton as a thread.
 ///
-/// This trait combines the notion of spawning a [super::fsa::ReadyAutomaton] into a
+/// This trait combines the notion of spawning a `super::fsa::ReadyAutomaton` into a
 /// thread (producing a handle), and then joining it, eventually yielding a
-/// a [super::fsa::Done].
+/// a `super::fsa::Done`.
 pub trait Threader<'entry, 'scope> {
     /// The type of thread handles.
     type Handle;
@@ -17,7 +17,7 @@ pub trait Threader<'entry, 'scope> {
         state: fsa::ReadyAutomaton<'entry, E>,
     ) -> err::Result<Self::Handle>;
 
-    /// Spawns a runner for each ReadyAutomaton state in an iterable, returning a
+    /// Spawns a runner for each `ReadyAutomaton` state in an iterable, returning a
     /// vector of handles.
     fn spawn_all<E: abs::Entry<'entry>>(
         &'scope self,

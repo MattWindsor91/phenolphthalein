@@ -52,6 +52,7 @@ pub struct Info {
 impl Info {
     /// Creates a new [Info] with the given outcome and iteration, and with
     /// an occurs count of 1.
+    #[must_use]
     pub fn new(outcome: outcome::Outcome, iteration: usize) -> Self {
         Self {
             occurs: 1,
@@ -62,6 +63,7 @@ impl Info {
 
     /// Computes the [Info] resulting from increasing this [Info]'s
     /// occurs count by 1.
+    #[must_use]
     pub fn inc(&self) -> Info {
         Info {
             occurs: self.occurs.saturating_add(1),

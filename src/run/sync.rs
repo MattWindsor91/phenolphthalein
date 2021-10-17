@@ -53,6 +53,7 @@ pub enum Role {
 
 impl Role {
     /// Maps from an `is_leader` boolean to a role.
+    #[must_use]
     pub fn from_leader(is_leader: bool) -> Self {
         /* We could implement this directly as a From on BarrierWaitResult,
         but we'd then have to implement it separately for std and spin. */
@@ -64,7 +65,7 @@ impl Role {
     }
 }
 
-/// Barriers are synchronisers; each phase corresponds to a barrier wait, and
+/// [Barrier]s are synchronisers; each phase corresponds to a barrier wait, and
 /// observers are nominated through the barrier's own leader function.
 unsafe impl Synchroniser for Barrier {
     fn run(&self) -> Role {
@@ -106,11 +107,15 @@ pub struct Spinner {
 }
 
 impl Spinner {
-    /// Constructs a new `Spinner` with room for `nthreads` threads.
+    /// Constructs a new [Spinner] with room for `nthreads` threads.
     ///
-    /// A `Spinner` can only hold enough threads that fit inside an `isize`,
-    /// for implementation reasons; the constructor will return an error if this
-    /// is not the case.
+    /// A [Spinner] can only hold enough threads that fit inside an `isize`,
+    /// for implementation reasons.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the number of threads is too high to fit inside the implementation of the
+    /// [Spinner].
     pub fn new(nthreads: NonZeroUsize) -> err::Result<Self> {
         let nthreads =
             isize::try_from(nthreads.get()).map_err(err::Error::TooManyThreadsForSpinner)?;
@@ -134,7 +139,7 @@ unsafe impl Synchroniser for Spinner {
         } else {
             // We need to wait until the last thread runs.
             while self.inner.load(Ordering::Acquire) >= 0 {
-                std::hint::spin_loop()
+                std::hint::spin_loop();
             }
             Role::Waiter
         }
@@ -168,16 +173,28 @@ unsafe impl Synchroniser for Spinner {
 pub type Factory = fn(NonZeroUsize) -> err::Result<Arc<dyn Synchroniser>>;
 
 /// Wrapper function for making synchronisers out of barriers.
+///
+/// # Errors
+///
+/// Cannot fail, but this may change in subsequent versions.
 pub fn make_barrier(nthreads: NonZeroUsize) -> err::Result<Arc<dyn Synchroniser>> {
     Ok(Arc::new(Barrier::new(nthreads.get())))
 }
 
 /// Wrapper function for making synchronisers out of spin-barriers.
+///
+/// # Errors
+///
+/// Cannot fail, but this may change in subsequent versions.
 pub fn make_spin_barrier(nthreads: NonZeroUsize) -> err::Result<Arc<dyn Synchroniser>> {
     Ok(Arc::new(spin::Barrier::new(nthreads.get())))
 }
 
 /// Wrapper function for making synchronisers out of spinners.
+///
+/// # Errors
+///
+/// Fails if the [Spinner] fails to construct (eg, the number of threads is too high).
 pub fn make_spinner(nthreads: NonZeroUsize) -> err::Result<Arc<dyn Synchroniser>> {
     Ok(Arc::new(Spinner::new(nthreads)?))
 }

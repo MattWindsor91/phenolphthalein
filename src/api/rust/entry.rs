@@ -22,10 +22,11 @@ impl abs::Entry<'static> for Static {
     }
 
     fn run(&self, tid: usize, e: &Self::Env) {
-        (self.test)(tid, e)
+        (self.test)(tid, e);
     }
 
     fn checker(&self) -> Box<dyn abs::Checker<Self::Env>> {
-        abs::check::make_optional(|f| Box::new(*f), &self.check)
+        self.check
+            .map_or_else(abs::check::box_unknown, |f| Box::new(f))
     }
 }

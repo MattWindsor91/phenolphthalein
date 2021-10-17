@@ -24,14 +24,14 @@ impl<'a, E: abs::Env> State<'a, E> {
     pub fn observe(&mut self) -> Option<halt::Type> {
         let summary = self.observer.observe(&mut self.env, &*self.checker);
         self.env.reset();
-        self.exit_type(summary)
+        self.exit_type(&summary)
     }
 
     /// Checks whether the test should exit now.
-    pub fn exit_type(&self, summary: obs::Summary) -> Option<halt::Type> {
+    pub fn exit_type(&self, summary: &obs::Summary) -> Option<halt::Type> {
         self.halt_rules
             .iter()
-            .filter_map(|c| c.exit_type(&summary))
+            .filter_map(|c| c.exit_type(summary))
             .max()
     }
 }

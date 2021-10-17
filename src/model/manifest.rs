@@ -15,6 +15,7 @@ pub struct Manifest {
 impl Manifest {
     /// Constructs a slot reservation wide enough for the variables in this
     /// manifest.
+    #[must_use]
     pub fn reserve(&self) -> ReservationSet {
         ReservationSet {
             i32s: reserve_var_map(&self.i32s),

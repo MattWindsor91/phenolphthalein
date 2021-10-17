@@ -69,6 +69,11 @@ impl<'entry, E: abs::Entry<'entry>> Builder<'entry, E> {
     ///
     /// Building doesn't take ownership of the builder, so it can be used to
     /// run multiple (isolated) instances of the same test.
+    ///
+    /// # Errors
+    ///
+    /// Fails if any of the intermediate stages (making a manifest, making a shared state, and so
+    /// on) fail.  Generally, this suggests that the test entry has problems.
     pub fn build(&self) -> err::Result<Runner<'entry, E>> {
         let manifest = self.entry.make_manifest()?;
         let shared = self.make_shared_state(manifest)?;
@@ -110,6 +115,11 @@ pub struct Runner<'entry, E: abs::Entry<'entry>> {
 
 impl<'entry, T: abs::Entry<'entry>> Runner<'entry, T> {
     /// Runs the Runner's test until it exits.
+    ///
+    /// # Errors
+    ///
+    /// Fails if any of the rotations of the test fail, which typically means that the test code
+    /// has done something ill-advised.
     pub fn run(mut self) -> err::Result<model::report::Report> {
         while let Some(am) = self.instance.take() {
             match self.run_rotation(am)? {

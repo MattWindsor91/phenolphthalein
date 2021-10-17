@@ -48,7 +48,7 @@ impl std::str::FromStr for Strategy {
     }
 }
 
-/// Formats a [Strategy] by applying the inverse of [FromStr].
+/// Formats a [Strategy] by applying the inverse of `FromStr`.
 impl std::fmt::Display for Strategy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -79,7 +79,8 @@ impl Strategy {
     }
 
     /// Converts a permutation strategy to a factory.
-    pub fn to_factory<T: run::permute::HasTid>(&self) -> run::permute::Factory<T> {
+    #[must_use]
+    pub fn to_factory<T: run::permute::HasTid>(self) -> run::permute::Factory<T> {
         match self {
             Self::Random => permute::make_thread_rng,
             Self::Static => permute::make_nop,

@@ -39,7 +39,8 @@ impl<'a> abs::Entry<'a> for Entry<'a> {
 
     /// Gets a checker for this test.
     fn checker(&self) -> Box<dyn abs::Checker<Self::Env> + 'a> {
-        abs::check::make_optional(|sym| Box::new(Checker { sym: *sym }), &self.check)
+        self.check
+            .map_or_else(abs::check::box_unknown, |sym| Box::new(Checker { sym }))
     }
 }
 
@@ -50,6 +51,10 @@ pub struct Test {
 
 impl Test {
     /// Loads a test from a dynamic library at `file`.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors if the dynamic library fails to load, or any initial safety checks fail.
     pub fn load(file: &path::Path) -> err::Result<Self> {
         let c = unsafe { Container::load(file) }?;
         // TODO(@MattWindsor91): perform basic safety checks.

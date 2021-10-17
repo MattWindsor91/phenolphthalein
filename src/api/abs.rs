@@ -29,6 +29,10 @@ pub trait Entry<'a>: Clone + 'a {
     type Env: Env + 'a;
 
     /// Makes a manifest using information taken from the test entry point.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors if the test entry point is ill-formed (for instance, not enough threads).
     fn make_manifest(&self) -> err::Result<model::manifest::Manifest>;
 
     /// Runs the entry point given a thread ID and handle to the environment.
@@ -38,25 +42,16 @@ pub trait Entry<'a>: Clone + 'a {
     fn checker(&self) -> Box<dyn check::Checker<Self::Env> + 'a>;
 }
 
-/// If `opt` is `Some x`, calls `maker` on `x` to make a checker;
-/// otherwise, supplies a checker that always returns [model::Outcome::Unknown].
-pub fn option_checker<'a, E, T>(
-    maker: fn(T) -> Box<dyn check::Checker<E> + 'a>,
-    opt: Option<T>,
-) -> Box<dyn check::Checker<E> + 'a> {
-    if let Some(precursor) = opt {
-        maker(precursor)
-    } else {
-        Box::new(model::Outcome::Unknown)
-    }
-}
-
 /// Trait of medium-level handles to an observable test environment.
 ///
 /// This trait currently mainly exists to hide parts of the actual environment
 /// that aren't thread-safe to run, but may be more useful later on.
 pub trait Env: Sized {
     /// Constructs an environment for the given slot reservations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if we can't satisfy the reservation set `r`.
     fn of_reservations(r: model::slot::ReservationSet) -> err::Result<Self>;
 
     /// Gets the 32-bit integer in the given slot.

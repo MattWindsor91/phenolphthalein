@@ -51,7 +51,7 @@ impl std::str::FromStr for Strategy {
     }
 }
 
-/// Formats a [Strategy] by applying the inverse of [FromStr].
+/// Formats a [Strategy] by applying the inverse of `FromStr`.
 impl std::fmt::Display for Strategy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -73,7 +73,8 @@ impl Strategy {
 
     /// Gets the correct factory method for the synchronisation primitive
     /// requested in this argument set.
-    pub fn to_factory(&self) -> sync::Factory {
+    #[must_use]
+    pub fn to_factory(self) -> sync::Factory {
         match self {
             Self::Barrier => sync::make_barrier,
             Self::SpinBarrier => sync::make_spin_barrier,

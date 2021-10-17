@@ -82,7 +82,7 @@ impl FromStr for Outcome {
     }
 }
 
-/// The default outcome is [Outcome::Unknown].
+/// The default outcome is `Outcome::Unknown`.
 impl Default for Outcome {
     fn default() -> Self {
         Self::Unknown
@@ -115,6 +115,7 @@ impl Outcome {
     /// assert_eq!(Outcome::from_pass_bool(true), Outcome::Pass);
     /// assert_eq!(Outcome::from_pass_bool(false), Outcome::Fail);
     /// ```
+    #[must_use]
     pub fn from_pass_bool(is_pass: bool) -> Self {
         if is_pass {
             Self::Pass

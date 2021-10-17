@@ -44,23 +44,24 @@ impl<W: Write> Histogram<W> {
             self.w,
             "{occ}\t{sigil}>\t{state}\t(iter {iter})",
             occ = info.occurs,
-            sigil = self.check_sigil(info.outcome),
-            state = stringify_valuation(state),
+            sigil = check_sigil(info.outcome),
+            state = stringify_valuation(&state),
             iter = info.iteration,
         )
     }
+}
 
-    fn check_sigil(&self, r: model::Outcome) -> colored::ColoredString {
-        match r {
-            model::Outcome::Pass => "*".green(),
-            model::Outcome::Fail => ":".red(),
-            model::Outcome::Unknown => "?".yellow(),
-        }
+/// Produces the appropriate sigil for an outcome.
+fn check_sigil(r: model::Outcome) -> colored::ColoredString {
+    match r {
+        model::Outcome::Pass => "*".green(),
+        model::Outcome::Fail => ":".red(),
+        model::Outcome::Unknown => "?".yellow(),
     }
 }
 
 /// Converts a state valuation to a stirng.
-fn stringify_valuation(valuation: BTreeMap<String, model::state::Value>) -> String {
+fn stringify_valuation(valuation: &BTreeMap<String, model::state::Value>) -> String {
     /* TODO(@MattWindsor91): this should really be a Display impl, but
     valuations have no defined type off which to hang it. */
     valuation

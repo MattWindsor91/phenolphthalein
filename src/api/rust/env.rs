@@ -16,7 +16,7 @@ impl abs::Env for Env {
     fn of_reservations(reservations: slot::ReservationSet) -> err::Result<Self> {
         let slot::ReservationSet { i32s } = reservations;
         Ok(Env {
-            i32s: Slotset::new(i32s),
+            i32s: Slotset::new(&i32s),
         })
     }
 
@@ -25,7 +25,7 @@ impl abs::Env for Env {
     }
 
     fn set_i32(&mut self, slot: slot::Slot, v: i32) {
-        self.i32s.set(slot, v)
+        self.i32s.set(slot, v);
     }
 }
 
@@ -52,7 +52,7 @@ pub struct Slotset<A, T> {
 
 impl<A: Default, T: Default> Slotset<A, T> {
     /// Constructs a new slotset from a slot reservation.
-    pub fn new(res: slot::Reservation<T>) -> Self {
+    pub fn new(res: &slot::Reservation<T>) -> Self {
         Self {
             atomic: default_vec(res.atomic),
             non_atomic: default_vec(res.non_atomic),
@@ -111,7 +111,7 @@ impl<A: SlotAtomic<T>, T: Copy + Default> Slotset<A, T> {
                 s.slot_store(v);
             }
         } else if let Some(s) = self.non_atomic.get_mut(slot.index) {
-            *s.get_mut() = v
+            *s.get_mut() = v;
         }
     }
 }

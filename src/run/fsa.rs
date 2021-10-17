@@ -107,8 +107,8 @@ impl<'entry, E: Entry<'entry>> ReadyAutomaton<'entry, E> {
     /// same thread ID.
     ///
     /// To get multiple thread automata (which is what you'll want in most
-    /// cases that aren't unit tests), use the unsafe [clone], [clone_with_tid],
-    /// and [replicate] functions, or the safe [super::instance::Instance]
+    /// cases that aren't unit tests), use the unsafe [clone], `clone_with_tid`,
+    /// and [replicate] functions, or the safe `super::instance::Instance`
     /// wrapper.
     pub fn new(
         tid: usize,
@@ -251,6 +251,7 @@ impl<'entry, E: Entry<'entry>> Automaton<'entry, Observing, E> {
     /// Observes the shared state, returning back to a Running state.
     pub fn observe(mut self) -> Automaton<'entry, Running, E> {
         // We can't map_or_else here, because both legs move self.
+        #[allow(clippy::option_if_let_else)]
         if let Some(kill_type) = self.shared_state().observe() {
             self.kill(kill_type)
         } else {
