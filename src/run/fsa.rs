@@ -188,7 +188,7 @@ impl<'entry, E: Entry<'entry>> Automaton<'entry, Running, E> {
     }
 
     /// Runs a single iteration of this automaton.
-    pub fn step(self) -> RunOutcome<'entry, E> {
+    fn step(self) -> RunOutcome<'entry, E> {
         if let Some(halt_type) = self.halt_signal.get() {
             return RunOutcome::Done(Done {
                 tid: self.tid,
@@ -235,7 +235,7 @@ impl State for Waiting {}
 impl<'entry, E: Entry<'entry>> Automaton<'entry, Waiting, E> {
     /// Waits for the observing thread's automaton to move to the [Running]
     /// state, then also moves to the [Running] state.
-    pub fn wait(self) -> Automaton<'entry, Running, E> {
+    fn wait(self) -> Automaton<'entry, Running, E> {
         self.sync.wait();
         unsafe { self.change_state() }
     }
@@ -249,18 +249,15 @@ impl State for Observing {}
 
 impl<'entry, E: Entry<'entry>> Automaton<'entry, Observing, E> {
     /// Observes the shared state, returning back to a Running state.
-    pub fn observe(mut self) -> Automaton<'entry, Running, E> {
-        // We can't map_or_else here, because both legs move self.
-        #[allow(clippy::option_if_let_else)]
+    fn observe(mut self) -> Automaton<'entry, Running, E> {
         if let Some(kill_type) = self.shared_state().observe() {
-            self.kill(kill_type)
-        } else {
-            self.relinquish()
+            self.halt(kill_type);
         }
+        self.relinquish()
     }
 
     /// Borrows access to the shared state exposed by this `Observing`.
-    pub fn shared_state(&mut self) -> &mut shared::State<'entry, E::Env> {
+    fn shared_state(&mut self) -> &mut shared::State<'entry, E::Env> {
         /* This is safe provided that the FSA's synchroniser correctly
         guarantees only one automaton can be in the Observing state
         at any given time, and remains in it for the duration of this
@@ -272,18 +269,15 @@ impl<'entry, E: Entry<'entry>> Automaton<'entry, Observing, E> {
 
     /// Relinquishes the ability to observe the environment, and returns to a
     /// running state.
-    pub fn relinquish(self) -> Automaton<'entry, Running, E> {
+    fn relinquish(self) -> Automaton<'entry, Running, E> {
         self.sync.obs();
         unsafe { self.change_state() }
     }
 
-    /// Relinquishes the ability to observe the environment, marks the test as
-    /// dead, and returns to a waiting state.
-    pub fn kill(self, state: halt::Type) -> Automaton<'entry, Running, E> {
-        /* TODO(@MattWindsor91): maybe return Done here, and mock up waiting
-        on the final barrier, or return Waiting<Done> somehow. */
+    /// Handles a halting condition by marking the test as halted
+    /// (halt state `state`).
+    fn halt(&mut self, state: halt::Type) {
         self.halt_signal.set(state);
-        self.relinquish()
     }
 }
 
